@@ -20,10 +20,12 @@ The version of this toolkit is only for the evaluation of the training set of th
 [CORSMAL Containers Manipulation dataset](http://corsmal.eecs.qmul.ac.uk/containers_manip.html).
 
 Performance measures and scores are described in details in this document: 
-[link](http://corsmal.eecs.qmul.ac.uk/resources/ICPR2020_CORSMAL_Challenge_PerformanceScores.pdf]).
+[link](docs/2020_CORSMAL_Challenge_PerformanceScores.pdf).
 
 The repository also contains the submission form as example for the training set,
 annotation files (including filling densities per container) and a demo with examples of submissions.
+
+Submission form for the public testing set: [link]()
 
 ## Data format
 
@@ -57,6 +59,7 @@ Filling type values:
 
 Container Capacity:
 * -1: no estimation
+*  x: estimated value (>=0)
 
 ### Output
 
