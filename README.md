@@ -4,7 +4,7 @@
 
 Created date: 2020/08/25
 
-Modified date: 2020/08/25
+Modified date: 2020/08/30
 
 Version: 0.1
 
@@ -19,12 +19,12 @@ The version of this toolkit is only for the evaluation of the training set of th
 [CORSMAL Containers Manipulation dataset](http://corsmal.eecs.qmul.ac.uk/containers_manip.html).
 
 Performance measures and scores are described in details in this document: 
-[link](docs/2020_CORSMAL_Challenge_PerformanceScores.pdf).
+[PDF](docs/2020_CORSMAL_Challenge_PerformanceScores.pdf).
 
 The repository also contains the submission form as example for the training set,
 annotation files (including filling densities per container) and a demo with examples of submissions.
 
-Submission form for the public testing set: [link](docs/submission_form_pub_test.csv)
+Submission form for the public testing set: [here](docs/submission_form_pub_test.csv).
 
 ## Data format
 
