@@ -1,7 +1,6 @@
 # The CORSMAL Challenge evaluation toolkit
 
-*Authors*:
-* Alessio Xompero
+*Author*: Alessio Xompero
 
 Created date: 2020/08/25
 
@@ -25,7 +24,7 @@ Performance measures and scores are described in details in this document:
 The repository also contains the submission form as example for the training set,
 annotation files (including filling densities per container) and a demo with examples of submissions.
 
-Submission form for the public testing set: [link]()
+Submission form for the public testing set: [link](docs/submission_form_pub_test.csv)
 
 ## Data format
 
