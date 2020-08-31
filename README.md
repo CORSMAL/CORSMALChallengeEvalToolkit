@@ -18,13 +18,14 @@ The toolkit is developed in Python with Numpy, Pandas and Scikit-learn.
 The version of this toolkit is only for the evaluation of the training set of the
 [CORSMAL Containers Manipulation dataset](http://corsmal.eecs.qmul.ac.uk/containers_manip.html).
 
-Performance measures and scores are described in details in this document: 
-[PDF](docs/2020_CORSMAL_Challenge_PerformanceScores.pdf).
-
 The repository also contains the submission form as example for the training set,
 annotation files (including filling densities per container) and a demo with examples of submissions.
 
-Submission form for the public testing set: [here](docs/submission_form_pub_test.csv).
+Documents:
+* Technical details of performance measures and scores: [PDF](docs/2020_CORSMAL_Challenge_PerformanceScores.pdf)
+* Submission form for the public testing set: [here](docs/submission_form_pub_test.csv)
+* Presentation template: [PPT](docs/2020.09.04_Presentation_Template.pptx)
+* List of QMUL-EECS servers and their characteristics: [here](docs/QMUL_EECS_Teaching_Servers_List.csv)
 
 ## Data format
 
