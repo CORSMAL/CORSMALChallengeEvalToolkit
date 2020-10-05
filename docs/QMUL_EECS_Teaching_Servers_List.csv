@@ -1,8 +1,0 @@
-Name,OS,CPU,GPU,GPU RAM (GB),HTTP,RAM (GB),Cores
-deimos ,Centos 7 ,2 * Xeon Gold 5222  @ 3.80 GHz ,2 * Quadro RTX 6000 ,48,Yes ,192,16
-dupin ,CentOS 7 ,2 * E5-2620 v3 @ 2.40GHz ,4 * RTX 2070 ,32,Yes ,64,24
-fortunato ,CentOS 7 ,2 * E5-2620 v3 @ 2.40GHz ,4 * RTX 2070 ,32,Yes ,64,24
-luna ,Centos 7 ,2 * Xeon Gold 5222  @ 3.80 GHz ,2 * Quadro RTX 6000 ,48,Yes ,192,16
-phobos ,Centos 7 ,2 * Xeon Gold 5222  @ 3.80 GHz ,2 * Quadro RTX 6000 ,48,Yes ,192,16
-prospero ,CentOS 7 ,2 * E5-2620 v3 @ 2.40GHz ,4 * RTX 2070 ,32,Yes ,64,24
-usher ,CentOS 7 ,2 * E5-2620 v3 @ 2.40GHz ,4 * RTX 2070 ,32,Yes ,64,24
