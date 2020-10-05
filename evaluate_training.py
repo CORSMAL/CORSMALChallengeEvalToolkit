@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 #
 # Evaluation script for the training set of the CORSMAL Challenge 
-# at Intelligent Sensing Summer School 2020, 1-4 Sep
 #
 ################################################################################## 
 #        Author: Alessio Xompero
 #         Email: corsmal-challenge@qmul.ac.uk
 #
 #  Created Date: 2020/08/25
-# Modified Date: 2020/08/25
+# Modified Date: 2020/10/04
 #
 # Centre for Intelligent Sensing, Queen Mary University of London, UK
 # 
@@ -27,6 +26,7 @@ from sklearn import metrics
 import argparse 
 import copy 
 
+from pdb import set_trace as bp
 
 def computeWAFS(gt, est):
 	gt = gt.astype(str)
@@ -55,8 +55,8 @@ def computeFillingfMassWARE(gt, _est, containers):
 		score_c = np.exp(-ec);
 		score_c[est_c==-1]=0
 		score += np.sum(score_c)
-	# return score/len(gt) + 0.0046
-	return score/len(gt) + 0.0475
+
+	return score/len(gt) + 0.00493
 
 def computeWAREscore(gt, _est, containers):
 	est = copy.deepcopy(_est)
@@ -81,18 +81,22 @@ def computeCombined(est, baseline, densities_dict):
 		else:
 			densities.append(densities_dict.loc[est['Container ID'][i]-1][est['Filling type'][i]+1])
 	densities = np.array(densities)
-
+	
 	# Replace -1 by the baseline result
 	if all(est['Filling level'] == -1):
 		est['Filling level'] = baseline['Filling level']
 		num_tasks -= 1
 
 	if all(est['Container Capacity'] == -1):
-		est['Container Capacity'] = baseline['Container Capacity [mL]']
+		est['Container Capacity'] = baseline['Container Capacity']
 		num_tasks -= 1
+
+	fl = est['Filling level'].values
+	fl[est['Filling level'].values==1] = 50
+	fl[est['Filling level'].values==2] = 90
 	
 	# mass = Filling level x capacity x densitiy(filling)
-	estimated_mass = est['Filling level'].values/100. * est['Container Capacity'].values * baseline['Filling density [g/mL]'].values
+	estimated_mass = fl/100. * est['Container Capacity'].values * densities
 
 	if not all(est['Filling level'] == -1):
 		estimated_mass[est['Filling level'] == -1] = -1
@@ -100,7 +104,7 @@ def computeCombined(est, baseline, densities_dict):
 	if not all(est['Container Capacity'] == -1):
 		estimated_mass[est['Container Capacity'] == -1] = -1	
 
-	est.insert(est.shape[1], 'Filling mass [g]', estimated_mass)
+	est.insert(est.shape[1], 'Filling mass', estimated_mass)
 
 	return num_tasks / 3.
 
@@ -112,10 +116,13 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 
 	# Read annotations
-	gt = pd.read_csv('annotation_training_set.csv', sep=',')
+	gt = pd.read_csv('annotations/training_set.csv', sep=',')
 
 	# Read annotated densities (for combined task)
-	densities_dict = pd.read_csv('density_annotations.csv', sep=';')
+	densities_dict = pd.read_csv('annotations/density_average.csv', sep=';')
+
+	# Read baseline (random)
+	baseline = pd.read_csv('random123.csv', sep=',')
 
 	# Read submission
 	est = pd.read_csv('submissions/{}'.format(args.submission), sep=',')
@@ -123,11 +130,11 @@ if __name__ == '__main__':
 	# Compute metrics
 	T1 = computeWAFS(gt['Filling level'].values, est['Filling level'].values)
 	T2 = computeWAFS(gt['Filling type'].values, est['Filling type'].values)
-	T3 = computeWAREscore(gt['Container Capacity [mL]'].values, est['Container Capacity'].values, gt['Container ID'].values)
-	task_weight = computeCombined(est, gt, densities_dict)
-	T4 = computeFillingfMassWARE(gt['Filling mass [g]'], est['Filling mass [g]'], gt['Container ID'].values)
-
-	print(args.submission[:-4] , ' | {:.2f} | {:.2f} | {:.3f} | {:.3f}'.format(T1*100,T2*100,T3,T4*task_weight))
+	T3 = computeWAREscore(gt['Container Capacity'].values, est['Container Capacity'].values, gt['Container ID'].values)
+	task_weight = computeCombined(est, baseline, densities_dict)
+	T4 = computeFillingfMassWARE(gt['Filling mass'], est['Filling mass'], gt['Container ID'].values)
+	print(task_weight)
+	print(args.submission[:-4] , ' | {:.2f} | {:.2f} | {:.3f} | {:.3f}'.format(T1*100,T2*100,T3*100,T4*100*task_weight))
 	with open("res.csv", "a") as myfile:
 		myfile.write(args.submission[:-4] + ';{:.2f};{:.2f};{:.2f};{:.2f}\n'.format(T1*100,T2*100,T3*100,T4*100*task_weight))
 	

@@ -4,28 +4,41 @@
 
 Created date: 2020/08/25
 
-Modified date: 2020/08/30
+Modified date: 2020/10/04
 
-Version: 0.1
+Version: 0.2
 
 Resource type: software
 
 ## Description
 
-This repository contains the official evaluation toolkit for the CORSMAL Challenge 
-at the [2020 Intelligent Sensing Summer School](http://cis.eecs.qmul.ac.uk/school2020.html).
-The toolkit is developed in Python with Numpy, Pandas and Scikit-learn.
+This repository contains the official evaluation toolkit for the CORSMAL Challenge.
 The version of this toolkit is only for the evaluation of the training set of the
 [CORSMAL Containers Manipulation dataset](http://corsmal.eecs.qmul.ac.uk/containers_manip.html).
 
 The repository also contains the submission form as example for the training set,
-annotation files (including filling densities per container) and a demo with examples of submissions.
+annotation files (including filling densities per container) and a demo with 
+examples of submissions.
+
+Moreover, we provide a script to parse the dataset in the subdirectory, data_parser.
+The script can be used to integrate novel solutions. More details in the 
+[README](data_parser/README.md) of the data_parser. 
 
 Documents:
 * Technical details of performance measures and scores: [PDF](docs/2020_CORSMAL_Challenge_PerformanceScores.pdf)
-* Submission form for the public testing set: [here](docs/submission_form_pub_test.csv)
-* Presentation template: [PPT](docs/2020.09.04_Presentation_Template.pptx)
-* List of QMUL-EECS servers and their characteristics: [here](docs/QMUL_EECS_Teaching_Servers_List.csv)
+* Submission form for the public testing set: [here](docs/submission_forms/public_test_set.csv)
+
+Requirements:
+* Python
+* Numpy
+* Pandas
+* Scikit-learn
+
+
+## Challenge venues
+* [2020 International Conference on Pattern Recognition](http://corsmal.eecs.qmul.ac.uk/ICPR2020challenge.html)
+* [2020 Intelligent Sensing Summer School](http://cis.eecs.qmul.ac.uk/school2020.html)
+
 
 ## Data format
 
@@ -34,8 +47,8 @@ Documents:
 The input to the toolkit is .csv file that for each row contains the following
 fields:
 
-| Container ID | Sequence | Filling level | Filling type | Container Capacity |
-|--------------|----------|---------------|--------------|--------------------|
+| Container ID | Sequence | Container Capacity | Filling level | Filling type |
+|--------------|----------|--------------------|---------------|--------------|
 
 Note that each row should match the row of the annotation file for the training set.
 
@@ -44,11 +57,9 @@ Containers ID ranges from 1 to 9.
 Sequence ranges from 0 to 83 for glasses and cups (containers 1-6) and from 0 to 59
 for boxes (containers 7-9).
 
-Filling level values:
+Container Capacity:
 * -1: no estimation
-*  0: empty
-* 50: half-full
-* 90: full
+*  x: estimated value (>=0)
 
 Filling type values:
 * -1: no estimation
@@ -57,9 +68,12 @@ Filling type values:
 *  2: rice
 *  3: water
 
-Container Capacity:
+Filling level values:
 * -1: no estimation
-*  x: estimated value (>=0)
+*  0: empty
+*  1: half-full (50%)
+*  2: full (90%)
+
 
 ### Output
 
@@ -78,8 +92,15 @@ Task 3: Container capacity estimation
 Overall task: Filling mass 
 
 
-Note: The  final score will be weighed based on the number of tasks submitted 
-(i.e. 0.33 for one task, 0.66 for two tasks, 1 for the three tasks).
+Note: The overall task is not a linear combination of the scores outputted for
+Task 1, Task 2, and Task 3. The score for the overall task takes into consideration
+the formula for computing the filling mass based on the estimations of each task
+for each configuration. More details in the technical document: 
+[PDF](docs/2020_CORSMAL_Challenge_PerformanceScores.pdf)
+
+Note: The  final score (overall task) will be weighed based on the number of 
+tasks submitted (i.e. 0.33 for one task, 0.66 for two tasks, 1 for the three tasks).
+
 
 ## Enquiries, Question and Comments
 
