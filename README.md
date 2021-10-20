@@ -1,17 +1,5 @@
 # The CORSMAL Challenge evaluation toolkit
 
-*Author*: Alessio Xompero
-
-Created date: 2020/08/25
-
-Modified date: 2020/10/04
-
-Version: 0.2
-
-Resource type: software
-
-## Description
-
 This repository contains the official evaluation toolkit for the CORSMAL Challenge.
 The version of this toolkit is only for the evaluation of the training set of the
 [CORSMAL Containers Manipulation dataset](http://corsmal.eecs.qmul.ac.uk/containers_manip.html).
@@ -36,6 +24,10 @@ Requirements:
 
 
 ## Challenge venues
+
+Challenge is still on-going and could happen in future venues. Saty tuned!
+
+### Past venues
 * [2020 International Conference on Pattern Recognition](http://corsmal.eecs.qmul.ac.uk/ICPR2020challenge.html)
 * [2020 Intelligent Sensing Summer School](http://cis.eecs.qmul.ac.uk/school2020.html)
 
