@@ -107,7 +107,7 @@ def populateFile(n_conf, t1, t2, t3, t4, t5, myfile):
     
     c20 = round(5000*random.random() + 20)
     # print('[{:d}; {:d}; {:d}; {:d}; {:d}]'.format(id_con, x, e1, e2, e3))
-    myfile.write('{:d};{:d};{:d};{:d};{:.2f};{:.2f};{:.2f};{:.2f};{:d};{:.2f};{:.2f};{:.2f};{:d};{:d};{:d};{:d};{:d};{:d};{:d};{:d}\n'.format(c01,c02,c03,c04,c05,c06,c07,c08,c09,c10,c11,c12,c13,c14,c15,c16,c17,c18,c19,c20))
+    myfile.write('{:d},{:d},{:d},{:d},{:.2f},{:.2f},{:.2f},{:.2f},{:d},{:.2f},{:.2f},{:.2f},{:d},{:d},{:d},{:d},{:d},{:d},{:d},{:d}\n'.format(c01,c02,c03,c04,c05,c06,c07,c08,c09,c10,c11,c12,c13,c14,c15,c16,c17,c18,c19,c20))
     
 
 if __name__ == '__main__':
@@ -124,7 +124,7 @@ if __name__ == '__main__':
 
 
   myfile = open(args.filename, "w")
-  myfile.write('Configuration ID;Container capacity;Container mass;Filling mass;None;Pasta;Rice;Water;Filling type;Empty;Half-full;Full;Filling level;Witdh at the top;Width at the bottom;Height;Object safety;Distance;Angle difference;Execution time\n')
+  myfile.write('Configuration ID,Container capacity,Container mass,Filling mass,None,Pasta,Rice,Water,Filling type,Empty,Half-full,Full,Filling level,Width at the top,Width at the bottom,Height,Object safety,Distance,Angle difference,Execution time\n')
 
   populateFile(684, args.task1, args.task2, args.task3,args.task4,args.task5, myfile)
   # populateFile(2,84, args.task1, args.task2, args.task3, myfile)
