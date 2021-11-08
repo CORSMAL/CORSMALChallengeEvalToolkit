@@ -1,18 +1,7 @@
 # DataParser for CORSMAL Containers Manipulation
 
-*Author*: Alessio Xompero
-
-Created Date: 2020/09/13
-
-Modified Date: 2020/10/04
-
-Version: 0.1
-
-Resource type: software
-
-## Description
 Python script for parsing the CORSMAL Containers Manipulation dataset, including
-training set, public testing set, and private testing set. The script includes
+train set, public test set, and private test set. The script includes
 Numpy, OpenCV, and PyTorch libraries for testing and starting the development
 of solutions to solve different tasks on the dataset. To simply test the parsing
 of the dataset, libraries can be commented out.
@@ -77,8 +66,6 @@ corsmal-challenge@qmul.ac.uk If you would like to
 file a bug report or a feature request, use the Github issue tracker. 
 
 ## Licence
-This work is licensed under the Creative Commons Attribution-NonCommercial 4.0 
-International License. To view a copy of this license, visit 
-http://creativecommons.org/licenses/by-nc/4.0/ or send a letter to 
-Creative Commons, PO Box 1866, Mountain View, CA 94042, USA.
+This work is licensed under the MIT License. To view a copy of this license, 
+see [LICENSE](../LICENSE).
 

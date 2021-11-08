@@ -6,11 +6,12 @@
 #         Email: corsmal-challenge@qmul.ac.uk
 #
 #  Created Date: 2020/09/13
-# Modified Date: 2021/11/07
+# Modified Date: 2021/11/08
 #
+################################################################################## 
 # MIT License
 
-# Copyright (c) 2021 Alessio Xompero
+# Copyright (c) 2021 CORSMAL
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -52,119 +53,61 @@ import os
 # device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
-fnames_filling =  ['fi0_fu0','fi1_fu1', 'fi1_fu2','fi2_fu1', 'fi2_fu2', 'fi3_fu1', 'fi3_fu2']
-fnames_filling2 = ['fi0_fu0','fi1_fu1', 'fi1_fu2','fi2_fu1', 'fi2_fu2']
-
-def populate_filenames(mode):
-	list_filenames = []
-	for s in range(0,3):
-		str_s = 's{:d}_'.format(s)
-		
-		for b in range(0,2):
-			str_b = '_b{:d}_'.format(b)
-			
-			for l in range(0,2):
-				str_l = 'l{:d}'.format(l)
-
-				if mode == 0:
-					for f in fnames_filling:
-						list_filenames.append(str_s + f + str_b + str_l)
-				else:
-					for f in fnames_filling2:
-						list_filenames.append(str_s + f + str_b + str_l)
-
-	return list_filenames
-
-
 # COMMENT OUT WHAT YOU DO NOT NEED
 def ParseFile(containerpath, f):
 	## RGB DATA
 	for cam_id in range(1,5):
-		rgbvideo = containerpath + '/rgb/' + f + '_c{:d}.mp4'.format(cam_id)
+		rgbvideo = containerpath + 'view{:d}/rgb/'.format(cam_id) + f + '.mp4'
 		print(rgbvideo)
 
 	## AUDIO DATA
-	audiofile = containerpath + '/audio/' + f + '_audio.wav'
+	audiofile = containerpath + 'audio/' + f + '.wav'
 	print(audiofile)
 
 	## DEPTH DATA
 	for cam_id in range(1,5):
-		depthpath = containerpath + '/depth/' + f + '/c{:d}'.format(cam_id)
+		depthpath = containerpath + 'view{:d}/depth/'.format(cam_id) + f + '/'
 		# print(depthpath)
 
 		for dfile in glob.glob(depthpath + '/*.png'):
 			print(dfile)
 
-
 	## IR DATA
 	for cam_id in range(1,5):
-		videoir1 = containerpath + '/ir/' + f + '_c{:d}_ir1.mp4'.format(cam_id)
+		videoir1 = containerpath + 'view{:d}/infrared1/'.format(cam_id) + f + '.mp4'
 		print(videoir1)
 
-		videoir2 = containerpath + '/ir/' + f + '_c{:d}_ir2.mp4'.format(cam_id)
+		videoir2 = containerpath + 'view{:d}/infrared2/'.format(cam_id) + f + '.mp4'
 		print(videoir2)
 
 	## CALIBRATION DATA
 	for cam_id in range(1,5):
-		calibfile = containerpath + '/calib/' + f + '_c{:d}_calib.pickle'.format(cam_id)
+		calibfile = containerpath + 'view{:d}/calib/'.format(cam_id) + f + '.pickle'
 		print(calibfile)
 
 	## IMU DATAa
 	for cam_id in range(3,5):
-		accelfile = containerpath + '/imu/' + f + '_accel_c{:d}.csv'.format(cam_id)
+		accelfile = containerpath + 'view{:d}/accel/'.format(cam_id) + f + '.csv'
 		print(accelfile)
 
-		gyrofile = containerpath + '/imu/' + f + '_gyro_c{:d}.csv'.format(cam_id)
+		gyrofile = containerpath + 'view{:d}/gyro/'.format(cam_id) + f + '.csv'
 		print(gyrofile)
 
 
-#### TRAINING DATA ###
+#### TRAIN SET ###
+def TrainSetDataParser(args):
+	for j in range(0,684):
+		ParseFile(args.datapath, '{:06d}'.format(j))
 
-def TrainingDataParser(args):
-	for objid in range(1,10):
-		containerpath = args.datapath + '/{:d}'.format(objid)
-		
-		if objid < 7:
-			list_files = populate_filenames(0)
-		else:
-			list_files = populate_filenames(1)
-
-		for f in list_files:
-			ParseFile(containerpath, f)
-
-
-#### PUBLIC TESTING SET ###
-def PublicTestingDataParser(args):
-	for objid in range(10,13):
-		containerpath = args.datapath + '/{:d}'.format(objid)
-		
-		list_files = []
-		if objid < 12:
-			for j in range(0,84):
-				list_files.append('{:04d}'.format(j))
-		else:
-			for j in range(0,60):
-				list_files.append('{:04d}'.format(j))
-
-		for f in list_files:
-			ParseFile(containerpath, f)
-
+#### PUBLIC TEST SET ###
+def PublicTestSetDataParser(args):
+	for j in range(0,228):
+		ParseFile(args.datapath, '{:06d}'.format(j))
 
 #### PRIVATE TESTING SET ###
-def PrivateTestingDataParser(args):
-	for objid in range(13,16):
-		containerpath = args.datapath + '/{:d}'.format(objid)
-		
-		list_files = []
-		if objid < 15:
-			for j in range(0,84):
-				list_files.append('{:04d}'.format(j))
-		else:
-			for j in range(0,60):
-				list_files.append('{:04d}'.format(j))
-
-		for f in list_files:
-			ParseFile(containerpath, f)
+def PrivateTestSetDataParser(args):
+	for j in range(0,228):
+		ParseFile(args.datapath, '{:06d}'.format(j))
 
 
 if __name__ == '__main__':
@@ -185,10 +128,10 @@ if __name__ == '__main__':
 	# print('Using {}'.format(device))
 	
 	if args.set == 'train':
-		TrainingDataParser(args)
+		TrainSetDataParser(args)
 	elif args.set == 'pubtest':
-		PublicTestingDataParser(args)
+		PublicTestSetDataParser(args)
 	elif args.set == 'privtest':
-		PrivateTestingDataParser(args)
+		PrivateTestSetDataParser(args)
 
 	print('Finished!')
