@@ -249,11 +249,14 @@ if __name__ == '__main__':
 	# Read submission
 	est = pd.read_csv('submissions/{}'.format(args.submission), sep=',')
 
+	est_filling_mass = copy.deepcopy(est)
 	# Compute metrics
 	task_weight = getTasksWeight(est)
 	print(task_weight)
 
-	bool_filling_mass = computeFillingMass(est, baseline, gt)
+	bool_filling_mass = computeFillingMass(est_filling_mass, baseline, gt)
+
+	est['Filling mass'] = est_filling_mass['Filling mass']
 
 	est['Filling level'] = est['Filling level'].replace(50,1)
 	est['Filling level'] = est['Filling level'].replace(90,2)
@@ -270,6 +273,7 @@ if __name__ == '__main__':
 	
 	if bool_filling_mass is True:
 		s8  = computeFillingMassScore(gt['filling mass'].values, est['Filling mass'].values)
+		s8 += 0.047505 # offset to reach 1 from the annotations
 	else:
 		s8 = 0
 	
@@ -286,20 +290,3 @@ if __name__ == '__main__':
 		myfile.write(args.submission[:-4] + ';{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f}\n'.format(scores[0],scores[1],scores[2],scores[3],scores[4],scores[5],scores[6],scores[7],scores[8],scores[9],scores[10]))
 	
 	myfile.close()
-
-
-	# def computeFillingfMassWARE(gt, _est, containers):
-	# est = copy.deepcopy(_est)
-
-	# score = .0
-	# for container in np.unique(containers):
-	# 	gt_c = gt[containers==container]
-	# 	est_c = est[containers==container]
-	# 	ec = np.abs(gt_c - est_c) / gt_c
-	# 	ec[(gt_c==0) & (est_c==0)] = 0
-	# 	ec[(gt_c == 0) & (est_c != 0)] = est_c[(gt_c == 0) & (est_c != 0)]
-	# 	score_c = np.exp(-ec);
-	# 	score_c[est_c==-1]=0
-	# 	score += np.sum(score_c)
-
-	# return score/len(gt) + 0.00493
