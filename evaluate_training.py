@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Evaluation script for the training set of the CORSMAL Challenge 
+# Evaluation script for the train set of the CORSMAL Challenge 
 #
 ################################################################################## 
 # Author: 
@@ -12,7 +12,7 @@
 #
 # MIT License
 
-# Copyright (c) 2021 Alessio Xompero
+# Copyright (c) 2021 CORSMAL
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -33,6 +33,7 @@
 # SOFTWARE.
 #--------------------------------------------------------------------------------
 
+import os
 import csv
 import math
 import numpy as np
@@ -42,6 +43,32 @@ import argparse
 import copy 
 
 from pdb import set_trace as bp
+
+
+def FillingTypeAndLevelMapping(f_type, f_level):
+	f_type_lvl = np.ones(f_type.shape[0]) * -1
+
+	if( max(f_level) == 2 ):
+		f_level[f_level==1] = 50
+		f_level[f_level==2] = 90
+	
+	idx0 = np.where( (f_type == 0) & (f_level == 0) )
+	idx1 = np.where( (f_type == 1) & (f_level == 50) )
+	idx2 = np.where( (f_type == 1) & (f_level == 90) )
+	idx3 = np.where( (f_type == 2) & (f_level == 50) )
+	idx4 = np.where( (f_type == 2) & (f_level == 90) )
+	idx5 = np.where( (f_type == 3) & (f_level == 50) )
+	idx6 = np.where( (f_type == 3) & (f_level == 90) )
+	
+	f_type_lvl[idx0] = 0
+	f_type_lvl[idx1] = 1
+	f_type_lvl[idx2] = 2
+	f_type_lvl[idx3] = 3
+	f_type_lvl[idx4] = 4
+	f_type_lvl[idx5] = 5
+	f_type_lvl[idx6] = 6
+	
+	return f_type_lvl
 
 
 def computeFillingMass(est, baseline, gt):
@@ -206,6 +233,9 @@ def computeDeliveryAccuracyScore(_est_distance, _est_angle):
 
 	return score
 
+def computeJointFillingTypeLevelScore(gt, _est):
+	return computeWeightedAverageF1Score(gt, _est)
+
 
 def getTasksWeight(_est):
 	est = copy.deepcopy(_est)
@@ -258,6 +288,9 @@ if __name__ == '__main__':
 
 	est['Filling mass'] = est_filling_mass['Filling mass']
 
+	est_flt = FillingTypeAndLevelMapping(est['Filling type'].values, est['Filling level'].values)
+	gt_flt = FillingTypeAndLevelMapping(gt['filling type'].values, gt['filling level'].values)
+
 	est['Filling level'] = est['Filling level'].replace(50,1)
 	est['Filling level'] = est['Filling level'].replace(90,2)
 	gt['filling level'] = gt['filling level'].replace(50,1)
@@ -280,13 +313,20 @@ if __name__ == '__main__':
 	s9  = computeObjectSafetyScore(est['Object safety'].values) # Evaluated in the simulator
 	s10 = computeDeliveryAccuracyScore(est['Distance'].values, est['Angle difference'].values) # Evaluated in the simulator
 
+	s11 = computeJointFillingTypeLevelScore(gt_flt, est_flt)
+
 	challenge_score = (s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 + s9 + s10) / 10 * task_weight
 
-	scores = np.array([s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,challenge_score]) * 100
+	scores = np.array([s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,challenge_score,s11]) * 100
 
-	print(args.submission[:-4] + ';{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f}\n'.format(scores[0],scores[1],scores[2],scores[3],scores[4],scores[5],scores[6],scores[7],scores[8],scores[9],scores[10]))
+	print(args.submission[:-4] + ';{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f}\n'.format(scores[0],scores[1],scores[2],scores[3],scores[4],scores[5],scores[6],scores[7],scores[8],scores[9],scores[10],scores[11]))
+
+	if not os.path.exists('res.csv'):
+	  results_file = open('res.csv', 'w')
+	  results_file.write('Team;s1;s2;s3;s4;s5;s6;s7;s8;s9;s10;overall;JFLT\n')
+	  results_file.close()
 
 	with open("res.csv", "a") as myfile:
-		myfile.write(args.submission[:-4] + ';{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f}\n'.format(scores[0],scores[1],scores[2],scores[3],scores[4],scores[5],scores[6],scores[7],scores[8],scores[9],scores[10]))
+		myfile.write(args.submission[:-4] + ';{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f}\n'.format(scores[0],scores[1],scores[2],scores[3],scores[4],scores[5],scores[6],scores[7],scores[8],scores[9],scores[10],scores[11]))
 	
 	myfile.close()
