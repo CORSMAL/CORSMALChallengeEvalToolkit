@@ -34,9 +34,10 @@ Requirements:
 
 ### Current venue
 <!-- [CORSMAL Challenge](http://corsmal.eecs.qmul.ac.uk/challenge.html) -->
-[2022 IEEE International Conference on Acoustic, Speech, and Signal Processing](http://corsmal.eecs.qmul.ac.uk/challenge.html)
+Audio-visual object classification for human-robot collaboration @[2022 IEEE International Conference on Acoustic, Speech, and Signal Processing](http://corsmal.eecs.qmul.ac.uk/challenge.html)
 
 **Important dates**
+| Date             |                             |
 |------------------|-------------------------------------|
 | January 10, 2022 | Release of the public test data set |
 | January 24, 2022 (11.59 PDT) | Submission of (i) papers, (ii) estimation results (T1-T5) on the public test data set, and (iii) and source code |
@@ -50,8 +51,8 @@ submitted to corsmal-challenge@qmul.ac.uk.
 
 
 ### Past venues
-* [2020 International Conference on Pattern Recognition](http://corsmal.eecs.qmul.ac.uk/ICPR2020challenge.html)
-* [2020 Intelligent Sensing Summer School](http://cis.eecs.qmul.ac.uk/school2020.html)
+* Multi-modal fusion and learning for robotics @[2020 International Conference on Pattern Recognition](http://corsmal.eecs.qmul.ac.uk/ICPR2020challenge.html)
+* Multi-modal fusion and learning for robotics @[2020 Intelligent Sensing Summer School](http://cis.eecs.qmul.ac.uk/school2020.html)
 
 
 ## Data format
