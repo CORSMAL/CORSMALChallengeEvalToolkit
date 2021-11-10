@@ -136,29 +136,43 @@ Execution time [ms]:
 
 ### Output
 
-The Python script outputs a .csv file with the results (percentage) of each submission per row: 
+The [evaluation script](evaluate.py) outputs a .csv file (e.g., 
+res_train_set.csv for the train set) with the results (percentage) of 
+each submission per row: 
 
-| Team | Task 1 | Task 2 | Task 3 | Overall Task |
-|------|--------|--------|--------|--------------|
-
-
-Task 1: Filling level classification
-
-Task 2: Filling type classification
-
-Task 3: Container capacity estimation
-
-Overall task: Filling mass 
+| Team | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 | s10 | Overall | JFTL |
+|------|----|----|----|----|----|----|----|----|----|-----|---------|------|
 
 
-Note: The overall task is not a linear combination of the scores outputted for
-Task 1, Task 2, and Task 3. The score for the overall task takes into consideration
-the formula for computing the filling mass based on the estimations of each task
-for each configuration. More details in the technical document: 
-[PDF](docs/PerformanceScores.pdf)
+* s1:  score for the filling level classification task (T1)
+* s2:  score for the filling type classification task (T2)
+* s3:  score for the container capacity estimation task (T3)
+* s4:  score for the container width at the top estimation (container dimensions task, T5)
+* s5:  score for the container width at the bottom estimation (container dimensions task, T5)
+* s6:  score for the container height (container dimensions task, T5)
+* s7:  score for the container mass estimation task (T4)
+* s8:  score for the filling mass estimation (computed by the toolkit from T1, T2, and T3)
+* s9:  score for the object safety estimation (estimated by the simulator run by the organisers)
+* s10: score for the delivery accuracy (estimated by the simulator run by the organisers)
+* Overall: aggregation (average) of the previous 10 performance scores (in percentage) and weighed based on the number of tasks submitted.
+* JFTL: score for the joint filling type and level classification (additional leaderboard)
 
-Note: The  final score (overall task) will be weighed based on the number of 
-tasks submitted (i.e. 0.33 for one task, 0.66 for two tasks, 1 for the three tasks).
+Only submissions which include the source code for the evaluation on the 
+private CCM test set will valid for the ranking. Source codes that are not 
+reproducible will get a 0 score.
+
+Note: The score for filling mass estimation is not a linear combination of the 
+scores outputted for T1, T2, and T3. The score takes into consideration the 
+formula for computing the filling mass based on the estimations of each task
+for each configuration. 
+
+More details in the technical document: [PDF](docs/PerformanceScores.pdf)
+
+
+For reproducibility, we report in the table below the results for the example 
+submissions on the train set.
+
+
 
 
 ## Demo
