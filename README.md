@@ -188,6 +188,10 @@ cd ..
 source run_eval_demo.sh
 ```
 
+Note that these example submissions do not contain estimations for object safety,
+distance, and angle difference, and hence results for the scores s8 and s8 are 0, and
+the overall score is up to maximum 80 instead of 100.
+
 For reproducibility, we report the results in the table below.
 
 | Team | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 | s10 | overall | JFLT |
