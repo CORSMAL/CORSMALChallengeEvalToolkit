@@ -1,8 +1,8 @@
 #!/bin/sh
 
-#DATA_SET=train
-#DATA_SET=test_pub
-DATA_SET=test_priv
+DATA_SET=train
+# DATA_SET=test_pub
+# DATA_SET=test_priv
 
 ################################################################################
 python generate_annotation_submissions.py --filename='test1.csv'  --set $DATA_SET --mode annotation --task1 --task2 --task3 --task4 --task5 
