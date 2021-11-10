@@ -1,12 +1,13 @@
 {
     "info": {
         "description": "CORSMAL Containers Manipulation",
-        "url": "http://corsmal.eecs.qmul.ac.uk/containers_manip.html",
         "version": "2.0",
         "year": 2021,
         "contributor": "CORSMAL Consortium",
-        "date_created": "07 Nov 2021",
-        "doi": "https://doi.org/10.17636/101CORSMAL1"
+        "date_created": "09 Nov 2021",
+        "url": "http://corsmal.eecs.qmul.ac.uk/containers_manip.html",
+        "doi": "https://doi.org/10.17636/101CORSMAL1",
+        "set": "train"
     },
     "licenses": {
         "url": "http://creativecommons.org/licenses/by-nc/4.0/",

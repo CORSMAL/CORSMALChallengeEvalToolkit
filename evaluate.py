@@ -42,9 +42,6 @@ from sklearn import metrics
 import argparse 
 import copy 
 
-from pdb import set_trace as bp
-
-
 def FillingTypeAndLevelMapping(f_type, f_level):
 	f_type_lvl = np.ones(f_type.shape[0]) * -1
 
@@ -266,18 +263,76 @@ if __name__ == '__main__':
 	# Arguments
 	parser = argparse.ArgumentParser(description='CORSMAL Challenge evaluation')
 	parser.add_argument('--submission', default='random.csv', type=str)
-	parser.add_argument('--annotation', default='ccm_train_annotation.csv', type=str)
-	parser.add_argument('--baseline', default='random.csv', type=str)
+	parser.add_argument('--set', default='train', help="Choose the set option:\n--train\n--test_pub\n--test_priv", choices=['train','test_pub','test_priv','test_comb'])
 	args = parser.parse_args()
 
-	# Read annotations
-	gt = pd.read_csv('annotations/{}'.format(args.annotation), sep=',')
+	if args.set == 'train':
+		outfile = 'res_train_set.csv'
+		offset = 0.047505
+		
+		annotationfile = 'annotations/ccm_train_annotation.csv'
+		baselinefile = 'submissions/train_set/random1.csv'
+		submissionfile = 'submissions/train_set/{}'.format(args.submission)
 
-	# Read baseline (random)
-	baseline = pd.read_csv(args.baseline, sep=',')
+		# Read annotations
+		gt = pd.read_csv(annotationfile, sep=',')
 
-	# Read submission
-	est = pd.read_csv('submissions/{}'.format(args.submission), sep=',')
+		# Read baseline (random)
+		baseline = pd.read_csv(baselinefile, sep=',')
+
+		# Read submission
+		est = pd.read_csv(submissionfile, sep=',')
+	
+	elif args.set == 'test_pub':
+		outfile = 'res_test_pub.csv'
+		offset = 0
+	
+		annotationfile = 'annotations/ccm_test_pub_annotation.csv'
+		baselinefile = 'submissions/pub_test_set/random1.csv'
+		submissionfile = 'submissions/pub_test_set/{}'.format(args.submission)
+
+		# Read annotations
+		gt = pd.read_csv(annotationfile, sep=',')
+
+		# Read baseline (random)
+		baseline = pd.read_csv(baselinefile, sep=',')
+
+		# Read submission
+		est = pd.read_csv(submissionfile, sep=',')
+	
+	elif args.set == 'test_priv':
+		outfile = 'res_test_priv.csv'
+		offset = 0
+
+		annotationfile = 'annotations/ccm_test_priv_annotation.csv'
+		baselinefile = 'submissions/priv_test_set/random1.csv'
+		submissionfile = 'submissions/priv_test_set/{}'.format(args.submission)
+
+		# Read annotations
+		gt = pd.read_csv(annotationfile, sep=',')
+
+		# Read baseline (random)
+		baseline = pd.read_csv(baselinefile, sep=',')
+
+		# Read submission
+		est = pd.read_csv(submissionfile, sep=',')
+
+	elif args.set == 'test_comb':
+		outfile = 'res_test_comb.csv'
+		offset = 0
+
+		annotationfiles = ['annotations/ccm_test_pub_annotation.csv', 'annotations/ccm_test_priv_annotation.csv']
+		baselinefiles = ['submissions/pub_test_set/random1.csv','submissions/priv_test_set/random1.csv']
+		submissionfiles = ['submissions/pub_test_set/{}'.format(args.submission),'submissions/priv_test_set/{}'.format(args.submission)]
+
+		# Read annotations
+		gt = pd.concat((pd.read_csv(f, sep=',') for f in annotationfiles), ignore_index=True)
+
+		# Read baseline (random)
+		baseline = pd.concat((pd.read_csv(f, sep=',') for f in baselinefiles), ignore_index=True)
+
+		# Read submission
+		est = pd.concat((pd.read_csv(f, sep=',') for f in submissionfiles), ignore_index=True)	
 
 	est_filling_mass = copy.deepcopy(est)
 	# Compute metrics
@@ -306,7 +361,7 @@ if __name__ == '__main__':
 	
 	if bool_filling_mass is True:
 		s8  = computeFillingMassScore(gt['filling mass'].values, est['Filling mass'].values)
-		s8 += 0.047505 # offset to reach 1 from the annotations
+		s8 += offset # offset to reach 1 from the annotations
 	else:
 		s8 = 0
 	
@@ -321,12 +376,12 @@ if __name__ == '__main__':
 
 	print(args.submission[:-4] + ';{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f}\n'.format(scores[0],scores[1],scores[2],scores[3],scores[4],scores[5],scores[6],scores[7],scores[8],scores[9],scores[10],scores[11]))
 
-	if not os.path.exists('res.csv'):
-	  results_file = open('res.csv', 'w')
+	if not os.path.exists(outfile):
+	  results_file = open(outfile, 'w')
 	  results_file.write('Team;s1;s2;s3;s4;s5;s6;s7;s8;s9;s10;overall;JFLT\n')
 	  results_file.close()
 
-	with open("res.csv", "a") as myfile:
+	with open(outfile, 'a') as myfile:
 		myfile.write(args.submission[:-4] + ';{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f}\n'.format(scores[0],scores[1],scores[2],scores[3],scores[4],scores[5],scores[6],scores[7],scores[8],scores[9],scores[10],scores[11]))
 	
 	myfile.close()

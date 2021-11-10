@@ -120,20 +120,13 @@ if __name__ == '__main__':
   parser.add_argument('--task4', default=False, action='store_true')
   parser.add_argument('--task5', default=False, action='store_true')
   parser.add_argument('--filename', default='teamN.csv', type=str)
+  parser.add_argument('--num_configs', default=684, type=int)
   args = parser.parse_args()
 
 
   myfile = open(args.filename, "w")
   myfile.write('Configuration ID,Container capacity,Container mass,Filling mass,None,Pasta,Rice,Water,Filling type,Empty,Half-full,Full,Filling level,Width at the top,Width at the bottom,Height,Object safety,Distance,Angle difference,Execution time\n')
 
-  populateFile(684, args.task1, args.task2, args.task3,args.task4,args.task5, myfile)
-  # populateFile(2,84, args.task1, args.task2, args.task3, myfile)
-  # populateFile(3,84, args.task1, args.task2, args.task3, myfile)
-  # populateFile(4,84, args.task1, args.task2, args.task3, myfile)
-  # populateFile(5,84, args.task1, args.task2, args.task3, myfile)
-  # populateFile(6,84, args.task1, args.task2, args.task3, myfile)
-  # populateFile(7,60, args.task1, args.task2, args.task3, myfile)
-  # populateFile(8,60, args.task1, args.task2, args.task3, myfile)
-  # populateFile(9,60, args.task1, args.task2, args.task3, myfile)
+  populateFile(args.num_configs, args.task1, args.task2, args.task3,args.task4,args.task5, myfile)
 
   myfile.close()
