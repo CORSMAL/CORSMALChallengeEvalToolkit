@@ -22,10 +22,10 @@ Documents:
 * Submission form for the public testing set: [here](docs/submission_forms/public_test_set.csv)
 
 Requirements:
-* Python
-* Numpy
-* Pandas
-* Scikit-learn
+* Python (Tested with 3.8.3)
+* Numpy (Tested with 1.18.5)
+* Pandas (Tested with 1.2.3)
+* Scikit-learn (Tested with 0.24.1)
 
 
 ## Challenge venues
@@ -140,8 +140,8 @@ The [evaluation script](evaluate.py) outputs a .csv file (e.g.,
 res_train_set.csv for the train set) with the results (percentage) of 
 each submission per row: 
 
-| Team | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 | s10 | Overall | JFTL |
-|------|----|----|----|----|----|----|----|----|----|-----|---------|------|
+| Team | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 | s10 | Overall | JFTL | CMD |
+|------|----|----|----|----|----|----|----|----|----|-----|---------|------|-----|
 
 
 * s1:  score for the filling level classification task (T1)
@@ -156,6 +156,7 @@ each submission per row:
 * s10: score for the delivery accuracy (estimated by the simulator run by the organisers)
 * Overall: aggregation (average) of the previous 10 performance scores (in percentage) and weighed based on the number of tasks submitted.
 * JFTL: score for the joint filling type and level classification (additional leaderboard)
+* CMD: score for the group tasks of container capacity and dimensions estimation (additional leaderboard)
 
 Only submissions which include the source code for the evaluation on the 
 private CCM test set will valid for the ranking. Source codes that are not 
@@ -164,7 +165,13 @@ reproducible will get a 0 score.
 Note: The score for filling mass estimation is not a linear combination of the 
 scores outputted for T1, T2, and T3. The score takes into consideration the 
 formula for computing the filling mass based on the estimations of each task
-for each configuration. 
+for each configuration. s8 is weighed by the number of tasks executed among
+filling level classification, filling type classification, and container capacity
+estimation.
+
+Note that s9 and s10 are weighed by the number of tasks executed (up to 5), whereas
+s4, s5, and s6 are weighed by 3 as they belong to the same task (container dimensions
+estimation).
 
 More details in the technical document: [PDF](docs/PerformanceScores.pdf)
 
@@ -187,6 +194,10 @@ source run_subm_gen.sh
 cd ..
 source run_eval_demo.sh
 ```
+
+The [evaluation script](evaluate.py) can be run with the following options:
+* --submission: path and filename of the submission file (e.g., submissions/pub_test/teamname.csv)
+* --set: choose between train, test_pub, test_priv, and test_comb 
 
 Note that these example submissions do not contain estimations for object safety,
 distance, and angle difference, and hence results for the scores s8 and s8 are 0, and

@@ -42,6 +42,8 @@ from sklearn import metrics
 import argparse 
 import copy 
 
+# from pdb import set_trace as bp
+
 def FillingTypeAndLevelMapping(f_type, f_level):
 	f_type_lvl = np.ones(f_type.shape[0]) * -1
 
@@ -70,18 +72,20 @@ def FillingTypeAndLevelMapping(f_type, f_level):
 
 def computeFillingMass(est, baseline, gt):
 	num_tasks = 3
+	num_tasks_completed = 3
+
 	# Replace -1 by the baseline result
 	if all(est['Filling type'] == -1):
 		est['Filling type'] = baseline['Filling type']
-		num_tasks -= 1
+		num_tasks_completed -= 1
 
 	if all(est['Filling level'] == -1):
 		est['Filling level'] = baseline['Filling level']
-		num_tasks -= 1
+		num_tasks_completed -= 1
 
 	if all(est['Container capacity'] == -1):
 		est['Container capacity'] = baseline['Container capacity']
-		num_tasks -= 1
+		num_tasks_completed -= 1
 
 	fl = est['Filling level'].values
 	fl[est['Filling level'].values==1] = 50
@@ -98,7 +102,7 @@ def computeFillingMass(est, baseline, gt):
 
 	est['Filling mass'] = estimated_mass
 
-	return num_tasks != 0
+	return num_tasks_completed / num_tasks
 
 def computeWeightedAverageF1Score(gt, est):
 	assert (len(gt) == len(est))
@@ -285,7 +289,7 @@ if __name__ == '__main__':
 	
 	elif args.set == 'test_pub':
 		outfile = 'res_test_pub.csv'
-		offset = 0
+		offset = 0.004339
 	
 		annotationfile = 'annotations/ccm_test_pub_annotation.csv'
 		baselinefile = 'submissions/pub_test_set/random1.csv'
@@ -302,7 +306,7 @@ if __name__ == '__main__':
 	
 	elif args.set == 'test_priv':
 		outfile = 'res_test_priv.csv'
-		offset = 0
+		offset = 0.004338
 
 		annotationfile = 'annotations/ccm_test_priv_annotation.csv'
 		baselinefile = 'submissions/priv_test_set/random1.csv'
@@ -319,7 +323,7 @@ if __name__ == '__main__':
 
 	elif args.set == 'test_comb':
 		outfile = 'res_test_comb.csv'
-		offset = 0
+		offset = 0.004338
 
 		annotationfiles = ['annotations/ccm_test_pub_annotation.csv', 'annotations/ccm_test_priv_annotation.csv']
 		baselinefiles = ['submissions/pub_test_set/random1.csv','submissions/priv_test_set/random1.csv']
@@ -339,7 +343,7 @@ if __name__ == '__main__':
 	task_weight = getTasksWeight(est)
 	print(task_weight)
 
-	bool_filling_mass = computeFillingMass(est_filling_mass, baseline, gt)
+	ntasks_filling_mass = computeFillingMass(est_filling_mass, baseline, gt)
 
 	est['Filling mass'] = est_filling_mass['Filling mass']
 
@@ -359,9 +363,10 @@ if __name__ == '__main__':
 	s6  = computeContainerHeightScore(gt['height'].values, est['Height'].values)
 	s7  = computeContainerMassScore(gt['container mass'].values, est['Container mass'].values)
 	
-	if bool_filling_mass is True:
+	if ntasks_filling_mass > 0:
 		s8  = computeFillingMassScore(gt['filling mass'].values, est['Filling mass'].values)
 		s8 += offset # offset to reach 1 from the annotations
+		s8 = s8 * ntasks_filling_mass
 	else:
 		s8 = 0
 	
@@ -369,19 +374,19 @@ if __name__ == '__main__':
 	s10 = computeDeliveryAccuracyScore(est['Distance'].values, est['Angle difference'].values) # Evaluated in the simulator
 
 	s11 = computeJointFillingTypeLevelScore(gt_flt, est_flt)
+	s12 = s3/2 + (s4 + s5 + s6)/6
 
-	challenge_score = (s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 + s9 + s10) / 10 * task_weight
+	challenge_score = (s1 + s2 + s3 + (s4 + s5 + s6)/3 + s7 + s8 + (s9 + s10) * task_weight) / 8 
 
-	scores = np.array([s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,challenge_score,s11]) * 100
+	scores = np.array([s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,challenge_score,s11,s12]) * 100
 
-	print(args.submission[:-4] + ';{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f}\n'.format(scores[0],scores[1],scores[2],scores[3],scores[4],scores[5],scores[6],scores[7],scores[8],scores[9],scores[10],scores[11]))
-
+	print(args.submission[:-4] + ';{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f}\n'.format(scores[0],scores[1],scores[2],scores[3],scores[4],scores[5],scores[6],scores[7],scores[8],scores[9],scores[10],scores[11],scores[12]))
 	if not os.path.exists(outfile):
 	  results_file = open(outfile, 'w')
-	  results_file.write('Team;s1;s2;s3;s4;s5;s6;s7;s8;s9;s10;overall;JFLT\n')
+	  results_file.write('Team;s1;s2;s3;s4;s5;s6;s7;s8;s9;s10;overall;JFLT;CMD\n')
 	  results_file.close()
 
 	with open(outfile, 'a') as myfile:
-		myfile.write(args.submission[:-4] + ';{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f}\n'.format(scores[0],scores[1],scores[2],scores[3],scores[4],scores[5],scores[6],scores[7],scores[8],scores[9],scores[10],scores[11]))
+		myfile.write(args.submission[:-4] + ';{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f};{:.2f}\n'.format(scores[0],scores[1],scores[2],scores[3],scores[4],scores[5],scores[6],scores[7],scores[8],scores[9],scores[10],scores[11],scores[12]))
 	
 	myfile.close()
