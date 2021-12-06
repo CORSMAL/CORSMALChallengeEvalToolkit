@@ -72,11 +72,9 @@ if __name__ == '__main__':
 	# Arguments
 	parser = argparse.ArgumentParser(description='CORSMAL Challenge evaluation')
 	parser.add_argument('--submission', default='random.csv', type=str)
+	parser.add_argument('--split', default=0, type=int, choices=[0,1,2])
 	args = parser.parse_args()
 
-	outfile = 'res_training_set.csv'
-	offset = 0.047505
-	
 	annotationfile = 'annotations/ccm_train_annotation.csv'
 	baselinefile = 'submissions/train_set/random1.csv'
 	submissionfile = 'submissions/train_set/{}'.format(args.submission)
@@ -90,7 +88,17 @@ if __name__ == '__main__':
 	# Read submission
 	est = pd.read_csv(submissionfile, sep=',')
 	
-	capacity_score  = computeContainerCapacityScore(gt['container capacity'].values, est['Container capacity'].values)
+	if args.split == 0:
+		idx = np.where( (gt['container id'].values == 3) | (gt['container id'].values == 6) | (gt['container id'].values == 9))
+		outfile = 'res_split0.csv'
+	elif args.split == 1:
+		idx = np.where( (gt['container id'].values == 1) | (gt['container id'].values == 5) | (gt['container id'].values == 7))
+		outfile = 'res_split1.csv'
+	elif args.split == 2:
+		idx = np.where( (gt['container id'].values == 2) | (gt['container id'].values == 4) | (gt['container id'].values == 8))
+		outfile = 'res_split2.csv'
+
+	capacity_score  = computeContainerCapacityScore(gt['container capacity'].values[idx], est['Container capacity'].values[idx])
 	
 
 	print(args.submission[:-4] + ';{:.2f}\n'.format(capacity_score*100))
