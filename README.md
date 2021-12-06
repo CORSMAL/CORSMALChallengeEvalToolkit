@@ -111,12 +111,13 @@ For this challenge the 2021 Intelligent Sensing Winter School, only the column *
 
 ### Output
 
-The [evaluation script](evaluate.py) outputs a .csv file (e.g., 
-res_training_set.csv for the training set) with the results (score in percentage) of 
-each submission per row: 
+The [evaluation script](evaluate.py) outputs three .csv files (e.g., 
+res_split0_set.csv for the first split of the training set) with the results 
+(score in percentage) of each submission per row: 
 
 | Team | score |
 |------|-------|
+
 
 
 ## Demo
@@ -139,7 +140,7 @@ source run_eval_demo.sh
 ```
 
 The [evaluation script](evaluate.py) can be run with the following options:
-* --submission: path and filename of the submission file (e.g., submissions/pub_test/teamname.csv)
+* --submission: path and filename of the submission file (e.g., submissions/train_set/teamname_split0.csv)
 
 
 
