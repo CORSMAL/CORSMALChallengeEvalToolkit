@@ -39,10 +39,10 @@ Audio-visual object classification for human-robot collaboration @[2022 IEEE Int
 **Important dates**
 | Date             |                             |
 |------------------|-------------------------------------|
-| January 10, 2022 | Release of the public test data set |
+| January 10, 2022 |  Release of the password for the public test set  |
 | January 24, 2022 (11.59 PDT) | Submission of (i) papers, (ii) estimation results (T1-T5) on the public test data set, and (iii) and source code |
 | February 10, 2022 (11.59 PDT) |  Paper acceptance notification and release of the results in the leaderboards |
-| January 17, 2022 (11.59 PDT) | Camera-ready papers due |
+| February 16, 2022 (11.59 PDT) | Camera-ready papers for ICASSP 2022 Proceedings due  |
 
 
 Papers must be formatted according to the instructions in the 
