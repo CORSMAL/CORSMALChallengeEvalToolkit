@@ -39,20 +39,15 @@ Audio-visual object classification for human-robot collaboration @[2022 IEEE Int
 **Important dates**
 | Date             |                             |
 |------------------|-------------------------------------|
-| January 10, 2022 |  Release of the password for the public test set  |
-| January 24, 2022 (11.59 PDT) | Submission of (i) papers, (ii) estimation results (T1-T5) on the public test data set, and (iii) and source code |
-| February 10, 2022 (11.59 PDT) |  Paper acceptance notification and release of the results in the leaderboards |
-| February 16, 2022 (11.59 PDT) | Camera-ready papers for ICASSP 2022 Proceedings due  |
+| February 10, 2022 (11.59 AoE) |  Paper acceptance notification and release of the results in the leaderboards |
+| February 16, 2022 (11.59 AoE) | Camera-ready papers due |
 
-
-Papers must be formatted according to the instructions in the 
-[ICASSP 2022 Paper Kit](https://2022.ieeeicassp.org/papers/paper_kit.php) and 
-submitted to corsmal-challenge@qmul.ac.uk. 
 
 
 ### Past venues
-* Multi-modal fusion and learning for robotics @[2020 International Conference on Pattern Recognition](http://corsmal.eecs.qmul.ac.uk/ICPR2020challenge.html)
-* Multi-modal fusion and learning for robotics @[2020 Intelligent Sensing Summer School](http://cis.eecs.qmul.ac.uk/school2020.html)
+* [2021 Intelligent Sensing Winter School](http://cis.eecs.qmul.ac.uk/school2021.html)
+* [2020 International Conference on Pattern Recognition](http://corsmal.eecs.qmul.ac.uk/ICPR2020challenge.html)
+* [2020 Intelligent Sensing Summer School](http://cis.eecs.qmul.ac.uk/school2020.html)
 
 
 ## Data format
