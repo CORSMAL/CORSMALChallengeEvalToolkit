@@ -119,6 +119,7 @@ def populateRandomEstimations(est, gt, args):
   if args.task4:
     if args.mode == 'average':
       cm_avg = np.average(gt['container mass'].unique())
+      bp()
       df['Container mass'] = df['Container mass'].replace(-1,int(cm_avg))
     else:
       df['Container mass'] = est['Container mass']
@@ -183,4 +184,4 @@ if __name__ == '__main__':
   elif args.mode == 'average':
     df = populateRandomEstimations(rnd, gt, args)
 
-  df.to_csv(outfilename,index=False)
+  # df.to_csv(outfilename,index=False)
