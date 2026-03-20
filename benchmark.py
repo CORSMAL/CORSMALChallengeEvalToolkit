@@ -1,20 +1,20 @@
 #!/usr/bin/env python
 #
 # Evaluation script for the CORSMAL Benchmark
+# Refer to: https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8968407
 #
 ################################################################################## 
 # Authors: 
 # - Alessio Xompero
 # - Xavier Weber
 # 
-# Email: corsmal-challenge@qmul.ac.uk
 #
 #  Created Date: 2023/01/11
-# Modified Date: 2023/01/11
+# Modified Date: 2026/03/20
 #
 # MIT License
 
-# Copyright (c) 2023 CORSMAL
+# Copyright (c) 2023-2026 CORSMAL
 
 # Permission is hereby granted, free of charge, to any person obtaining a 
 # copy of this software and associated documentation files (the "Software"), 
@@ -33,28 +33,35 @@
 # DEALINGS IN THE SOFTWARE.
 #----------------------------------------------------------------------------
 """
-
-Written by Xavier Weber
-
-Refer to: https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8968407
-
 TODO:
  - [ ] implement sigma_3()
  - [ ] implement s7_s8()
  - [ ] add functions from the 'challenge' script
  - [ ] read .xlsx file and compute the scores
 
-NOTE:
-- I don't know how to compute the mass of the filling. We only have the filling amount in millilitre, but to compute mass,
-  you need to convert it to grams. So you need to know how much the filling per ml weighs in grams. The ground-truths were done in white rice,
-  which is about 0.81g per 1ml. But the predictions could have used different rice, which could have a different weighing factor.
-
+NOTE
+I don't know how to compute the mass of the filling. We only have the filling amount in millilitre, but to compute mass,
+you need to convert it to grams. So you need to know how much the filling per ml weighs in grams. 
+The ground-truths were done in white rice,
+which is about 0.81g per 1ml. But the predictions could have used different rice, which could have a different weighing factor.
 """
 
+import os
+import sys
 import argparse
 import pandas as pd
 import json
 import numpy as np
+
+from loguru import logger
+
+# Configure logger
+logger.remove()  # Remove default handler
+logger.add(sys.stderr, format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
+                              "<level>{level: <8}</level> | "
+                              "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+                              "<level>{message}</level>",
+           level="DEBUG")
 
 
 
@@ -361,35 +368,100 @@ def Sg(lambdas, s9, s11, s12, s13):
     return lambdas[8] * s9 + lambdas[10] * s11 + lambdas[11] * s12 + lambdas[12] * s13
 
 
+def ensure_csv_exists(path: str) -> str:
+    """
+    Ensure the CSV file exists. If not, create a template file.
+    """
+    if not os.path.isfile(path):
+        logger.info(f"CSV file not found: {path}. Creating a template...")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("id,value\n")  # Example header
+            logger.info(f"Template CSV created at: {path}")
+        except OSError as e:
+            raise argparse.ArgumentTypeError(f"Cannot create file {path}: {e}")
+    return path
 
-def GetParser():
+def existing_file(path: str) -> str:
+    """
+    Validate that the given path points to an existing file.
+    Raises argparse.ArgumentTypeError if not found.
+    """
+    if not os.path.isfile(path):
+        raise argparse.ArgumentTypeError(f"File not found: {path}")
+    return path
+
+from argparse import ArgumentParser
+def get_parser() -> ArgumentParser:
+    """
+    Create and configure the argument parser for the CORSMAL Evaluation Toolkit.
+
+    Returns:
+        argparse.ArgumentParser: Configured parser with CLI arguments.
+    """
     parser = argparse.ArgumentParser(
-        description='CORSMAL Evaluation Toolkit',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        description="CORSMAL Evaluation Toolkit",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
 
-    parser.add_argument('--challenge', action='store_true')
-        parser.add_argument('--benchmark', action='store_true')
-        parser.add_argument('--submission_csv', default='random.csv', type=str)
-        #parser.add_argument('--submission_xlsx', default='Submission_form.xlsx', type=str)
-    
+    parser.add_argument(
+        "--challenge",
+        action="store_true",
+        help="Run in challenge mode."
+    )
+    parser.add_argument(
+        "--benchmark",
+        action="store_true",
+        help="Run in benchmark mode."
+    )
+    parser.add_argument(
+        "--submission_csv",
+        default="random.csv",
+        type=existing_file,  # Validation here
+        help="Path to the submission CSV file."
+    )
+
     return parser
 
 
+if __name__ == "__main__":
+    logger.info("Initialising...")
+    logger.info(f"Python {sys.version_info.major}.{sys.version_info.minor}")
 
-if __name__ == '__main__':
-    
-    print('Initialising:')
-    print('Python {}.{}'.format(sys.version_info[0], sys.version_info[1]))
-    # print('OpenCV {}'.format(cv2.__version__))
+    # Optional: Show OpenCV version if installed
+    try:
+        import cv2
+        logger.info(f"OpenCV {cv2.__version__}")
+    except ImportError:
+        logger.warning("OpenCV not installed.")
 
-    # Arguments
-    parser = GetParser()
-    args = parser.parse_args()
+    try:
+        # Parse CLI arguments
+        parser = get_parser()
+        args = parser.parse_args()
+
+        # Debug: Show parsed arguments
+        logger.debug(f"Arguments received: {args}")
+
+        # Example: Mode selection
+        if args.challenge:
+            logger.info("Running in challenge mode...")
+        elif args.benchmark:
+            logger.info("Running in benchmark mode...")
+        else:
+            logger.warning("No mode selected. Use --challenge or --benchmark.")
+
+    except argparse.ArgumentError as e:
+        logger.error(f"Argument parsing failed: {e}")
+        sys.exit(1)
+    except Exception as e:
+        logger.exception(f"Unexpected error: {e}")
+        sys.exit(1)
 
     #create_new_pandaframe_submission_form()
     
-    if args.benchmark:
-        
+
+def run_benchmark(args):        
         # Read .json dictionary containing the ground-truths
         f = open('benchmark_groundtruths.json')
         GTs = json.load(f)
