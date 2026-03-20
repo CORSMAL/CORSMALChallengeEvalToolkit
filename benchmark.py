@@ -316,45 +316,67 @@ class CorsmalEvaluationToolkit():
         self.compute_fullness(fullnesses_pr, fullnesses_gt)
 
 ##################################################################################
-def create_new_pandaframe_submission_form():
+def create_submission_form(output_path: str = "./submission_form.csv") -> pd.DataFrame:
     """
-    Let's create a better form for the submission_form_test.xlsx
+    Create a structured submission form DataFrame for CORSMAL evaluation.
+
+    Args:
+        output_path (str): Path to save the generated CSV file.
+
+    Returns:
+        pd.DataFrame: The generated submission form.
     """
-    df = pd.DataFrame()
-    
-    cups = [1]*18 + [2]*18 + [3]*18 + [4]*18
-    cups = cups*4
+    # Constants
+    NUM_CONFIGS = 288
+    CUP_TYPES = [1, 2, 3, 4]
+    FILLING_VALUES = [0, 125, 0, 400, 0, 450, 0, 300]
+    GRASP_TYPES = [1, 2, 3]
+    HANDOVER_LOCATIONS = [1, 2, 3]
+    SUBJECTS = [1, 2, 3, 4]
 
-    filling_ml = [0]*9 + [125]*9 + [0]*9 + [400]*9 + [0]*9 + [450]*9 + [0]*9 + [300]*9
-    filling_ml = filling_ml*4
+    # Generate repeated patterns
+    cups = ( [cup] * 18 for cup in CUP_TYPES )
+    cups = list(sum(cups, [])) * 4
 
-    grasp_types = [1]*3 + [2]*3 + [3]*3 
-    grasp_types = grasp_types * 32
+    filling_ml = []
+    for val in FILLING_VALUES:
+        filling_ml.extend([val] * 9)
+    filling_ml *= 4
 
-    handover_location = [1,2,3] * 96
+    grasp_types = (GRASP_TYPES * 3) * 32
+    handover_location = HANDOVER_LOCATIONS * 96
+    subjects = sum(([sub] * 72 for sub in SUBJECTS), [])
 
-    subjects = [1]*72 + [2]*72 + [3]*72 + [4]*72
+    # Create DataFrame
+    df = pd.DataFrame({
+        "configuration": list(range(1, NUM_CONFIGS + 1)),
+        "cup": cups,
+        "filling (ml)": filling_ml,
+        "grasp type": grasp_types,
+        "handover location": handover_location,
+        "subject": subjects,
+        "w^i (mm)": [-1] * NUM_CONFIGS,
+        "w^i_b (mm)": [-1] * NUM_CONFIGS,
+        "h^i (mm)": [-1] * NUM_CONFIGS,
+        "m^i_v (grams)": [-1] * NUM_CONFIGS,
+        "f^i (%)": [-1] * NUM_CONFIGS,
+        "m^i_r (grams)": [-1] * NUM_CONFIGS,
+        "d^i (mm)": [-1] * NUM_CONFIGS,
+        "w^i (grams)": [-1] * NUM_CONFIGS,
+        "t^i_{hm} (ms)": [-1] * NUM_CONFIGS,
+        "t^i_{ho} (ms)": [-1] * NUM_CONFIGS,
+        "t^i_{rm} (ms)": [-1] * NUM_CONFIGS
+    })
 
-    # configuration
-    df["configuration"] = list(range(1, 289))
-    df["cup"] = cups
-    df["filling (ml)"] = filling_ml
-    df["grasp type"] = grasp_types
-    df["handover location"] = handover_location
-    df["subject"] = subjects
-    df["w^i (mm)"] = [-1] * 288
-    df["w^i_b (mm)"] = [-1] * 288
-    df["h^i (mm)"] = [-1] * 288 
-    df["m^i_v (grams)"] = [-1] * 288
-    df["f^i (%)"] = [-1] * 288
-    df["m^i_r (grams)"] = [-1] * 288
-    df["d^i (mm)"] = [-1] * 288
-    df["w^i (grams)"] = [-1] * 288
-    df["t^i_{hm} (ms)"] = [-1] * 288
-    df["t^i_{ho} (ms)"] = [-1] * 288
-    df["t^i_{rm} (ms)"] = [-1] * 288
-    
-    df.to_csv("./Submission_form.csv")
+    # Save to CSV with error handling
+    try:
+        df.to_csv(output_path, index=False)
+        logger.info(f"Submission form saved to: {output_path}")
+    except OSError as e:
+        logger.error(f"Failed to save submission form: {e}")
+        raise
+
+    return df
 
 
 # Group: Task
