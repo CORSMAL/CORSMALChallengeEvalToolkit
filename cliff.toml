@@ -1,0 +1,31 @@
+[git]
+conventional_commits = false
+
+[[git.commit_parsers]]
+message = "(?i)(add|added|create|implement|new)"
+group = "Added"
+
+[[git.commit_parsers]]
+message = "(?i)(change|update|modify|refactor|improve|adjust)"
+group = "Changed"
+
+[[git.commit_parsers]]
+message = "(?i)(fix|bug|issue|patch|resolve)"
+group = "Fixed"
+
+[[git.commit_parsers]]
+message = "(?i)(remove|delete|drop)"
+group = "Removed"
+
+[[git.commit_parsers]]
+message = "(?i)(deprecate)"
+group = "Deprecated"
+
+[[git.commit_parsers]]
+message = "(?i)(security|vuln|cve)"
+group = "Security"
+
+# fallback for anything that doesn't match
+[[git.commit_parsers]]
+message = ".*"
+group = "Miscellaneous"
