@@ -2,7 +2,8 @@ import os
 import pandas as pd
 import pytest
 from pathlib import Path
-from benchmark import create_submission_form 
+
+from corsmal_toolkit.submission_form import create_submission_form 
 
 # Expected schema
 EXPECTED_COLUMNS = [
