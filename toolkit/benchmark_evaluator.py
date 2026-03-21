@@ -263,32 +263,89 @@ class CorsmalEvaluationToolkit:
     # -------------------------
     # Sigma Functions
     # -------------------------
-    def compute_score_type_1(self, a: Number, b: Number) -> Number:
+    def compute_score_type_1(self, 
+                        a: Number, 
+                        b: Number,
+                        *,
+                        min_value: Optional[float] = None,
+                        max_value: Optional[float] = None,
+                        epsilon_absolute: Optional[float] = None,
+                        atol: float = 1e-10,
+                        return_array: bool = False) -> Union[float, np.ndarray]:
         """
-        Sigma score type 1: relative difference scoring.
+        Sigma_1 (σ₁): Relative difference scoring.
 
+        Used for: s1-s5 (width_top, width_bottom, height, mass_vision, fullness)
+    
+        Formula:
+            σ₁(a, b) = {
+                1.0,              if a=0 ∧ b=0  (perfect match) [only for fullness]
+                0.0,              if |a-b| ≥ |b|  (100%+ error)
+                1 - |a-b|/|b|,    otherwise (relative error)
+            }
+        
         Args:
-            a: Predicted value(s).
-            b: Ground truth value(s).
-
+            a: Predicted value(s)
+            b: Ground truth value(s)
+            min_value: Validate all values >= min_value
+            max_value: Validate all values <= max_value
+            epsilon_absolute: If provided, use absolute tolerance for |b| < epsilon_absolute
+            atol: Absolute tolerance for zero comparisons
+            return_array: If True, always return array; else return float for scalar input
+        
         Returns:
-            Score(s) between 0 and 1.
+            Score in [0, 1]
         """
+        # Convert and validate
         a = np.asarray(a, dtype=float)
         b = np.asarray(b, dtype=float)
-
-        # Handle zero-zero case
-        mask_zero = (a == 0) & (b == 0)
+        
+        if a.shape != b.shape:
+            raise ValueError(f"Shape mismatch: {a.shape} vs {b.shape}")
+        
+        if min_value is not None and (np.any(a < min_value) or np.any(b < min_value)):
+            raise ValueError(f"Values below minimum {min_value}")
+        
+        if max_value is not None and (np.any(a > max_value) or np.any(b > max_value)):
+            raise ValueError(f"Values exceed maximum {max_value}")
+        
+        is_scalar = (a.ndim == 0)
+        a = np.atleast_1d(a)
+        b = np.atleast_1d(b)
+        
+        # Compute scores
         score = np.ones_like(a, dtype=float)
-
-        diff_a_b = np.abs(a - b)
-        mask_large_diff = diff_a_b >= np.abs(b)
-
-        score[mask_large_diff] = 0
-        mask_normal = ~mask_zero & ~mask_large_diff
-        score[mask_normal] = 1 - (diff_a_b[mask_normal] / np.abs(b[mask_normal]))
-
-        return score if score.size > 1 else float(score)
+        diff = np.abs(a - b)
+        b_abs = np.abs(b)
+        
+        # Case 1: Both zero
+        mask_zero = np.isclose(a, 0, atol=atol) & np.isclose(b, 0, atol=atol)
+        score[mask_zero] = 1.0
+        
+        # Case 2: Small ground truth (use absolute tolerance if provided)
+        if epsilon_absolute is not None:
+            mask_small = ~mask_zero & (b_abs < epsilon_absolute)
+            score[mask_small] = np.clip(1.0 - diff[mask_small] / epsilon_absolute, 0, 1)
+            mask_normal = ~mask_zero & ~mask_small
+        else:
+            # Original: large error case
+            mask_large = ~mask_zero & (diff >= b_abs)
+            score[mask_large] = 0.0
+            mask_normal = ~mask_zero & ~mask_large
+        
+        # Case 3: Normal relative error
+        with np.errstate(divide='ignore', invalid='ignore'):
+            if np.any(mask_normal):
+                rel_error = diff[mask_normal] / b_abs[mask_normal]
+                score[mask_normal] = np.clip(1.0 - rel_error, 0, 1)
+        
+        score = np.nan_to_num(score, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        # Return type
+        if return_array or not is_scalar:
+            return score
+        else:
+            return float(score.flat[0])
 
     def compute_score_type_2(self, a: Number, eta: float) -> Number:
         """
