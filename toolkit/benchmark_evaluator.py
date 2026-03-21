@@ -1,7 +1,29 @@
 #!/usr/bin/env python
-#
-# Evaluation script for the CORSMAL Benchmark
-# Refer to: https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8968407
+"""
+CORSMAL Benchmark Evaluation Toolkit
+
+Implements performance scoring for human-to-robot handover benchmarks as specified in:
+    Sanchez-Matilla et al. (2020). "Benchmark for Human-to-Robot Handovers of Unseen 
+    Containers with Unknown Filling." IEEE Robotics and Automation Letters, 5(2), 1642-1649.
+
+Performance Measures:
+    Vision (S_vision): s1-s5 (geometric and fullness estimation)
+    Robot (S_robot): s6-s8 (mass, hand pose, end-effector estimation)
+    Task (S_task): s9, s11-s14 (delivery location, mass, time metrics)
+    Benchmark (S_benchmark): Overall score = (S_vision + S_robot + S_task) / 3
+
+Scoring Functions:
+    σ₁: Relative difference scoring (0 to 1, where 1 = exact match)
+    σ₂: Threshold-based scoring (penalizes errors > threshold)
+    σ₃: Pose-based scoring (6D position + orientation)
+
+Usage:
+    evaluator = CorsmalEvaluationToolkit(n_config_cup=18, n_subjects=4)
+    evaluator.compute_width_top(predictions, ground_truths)
+    # ... more metrics ...
+    S_vision = evaluator.compute_vision_score()
+    S_benchmark = evaluator.compute_benchmark_score()
+"""
 #
 ################################################################################## 
 # Authors: 
@@ -58,6 +80,19 @@ logger.add(sys.stderr, format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
 ###############################################################################
 
 Number = Union[int, float, np.ndarray]
+
+FILLING_DENSITY = {
+       "rice": 0.81,      # grams per mL
+       "pasta": 0.75,     # estimated
+       "water": 1.0,      # grams per mL
+   }
+
+# CORSMAL benchmark thresholds (from paper)
+DELIVERY_LOCATION_THRESHOLD_MM = 50.0      # Distance from target
+DELIVERY_MASS_THRESHOLD_G = 50.0           # Mass tolerance
+TIME_HUMAN_MANEUVERING_THRESHOLD_S = 10.0
+TIME_HANDOVER_THRESHOLD_S = 5.0
+TIME_ROBOT_MANEUVERING_THRESHOLD_S = 15.0
 
 class CorsmalEvaluationToolkit:
     """
@@ -172,6 +207,7 @@ class CorsmalEvaluationToolkit:
         self.check_length_arrays(preds, gts)
         
     def get_measure_annotations(
+        self, 
         df_annotations: pd.DataFrame,
         measure: str,
         n_config_cup: int,
@@ -285,6 +321,38 @@ class CorsmalEvaluationToolkit:
         # Placeholder: Euclidean distance scoring
         diff = np.linalg.norm(np.asarray(P) - np.asarray(P_hat))
         return 1.0 if diff <= epsilon else max(0.0, 1 - diff / epsilon)
+    
+    def compute_score_type_3_6d(self, P_gt, P_pred, epsilon_pos_mm, epsilon_rot_deg):
+        """
+        Compute sigma_3 for 6D pose (position + orientation).
+        
+        Args:
+            P_gt: Ground truth pose (position_mm: 3D, orientation: 3x3 rotation matrix)
+            P_pred: Predicted pose (same format)
+            epsilon_pos_mm: Position tolerance in mm
+            epsilon_rot_deg: Rotation tolerance in degrees
+        
+        Returns:
+            Score between 0 and 1
+        """
+        # Extract position error
+        pos_gt = np.array(P_gt[:3])
+        pos_pred = np.array(P_pred[:3])
+        pos_error = np.linalg.norm(pos_gt - pos_pred)
+        
+        # Compute rotation error (use geodesic distance on SO(3))
+        R_gt = np.array(P_gt[3:]).reshape(3, 3)
+        R_pred = np.array(P_pred[3:]).reshape(3, 3)
+        R_rel = R_gt.T @ R_pred
+        # Angle from rotation matrix: θ = arccos((trace(R) - 1) / 2)
+        trace = np.trace(R_rel)
+        rot_error_rad = np.arccos(np.clip((trace - 1) / 2, -1, 1))
+        rot_error_deg = np.degrees(rot_error_rad)
+        
+        # Weighted combination
+        pos_score = max(0.0, 1 - (pos_error / epsilon_pos_mm))
+        rot_score = max(0.0, 1 - (rot_error_deg / epsilon_rot_deg))
+        return (pos_score + rot_score) / 2.0
 
     # -------------------------
     # Metric Computations
@@ -383,16 +451,18 @@ class CorsmalEvaluationToolkit:
     # Group Score Computations
     # -------------------------
     def compute_vision_score(self) -> float:
+        """
+        Compute vision score as weighted combination of geometric and fullness metrics.
+        
+        Paper: Sanchez-Matilla et al., RA-L 2020
+        Weights: Geometric (width_top, width_bottom, height) each 1/9
+                Physical properties (mass, fullness) each 1/3
+        Formula: S_vision = (1/9)(s1 + s2 + s3) + (1/3)(s4 + s5)
+        """
         v = self.scores["vision"]
-        score = (
-            v["width_top"] / 9 +
-            v["width_bottom"] / 9 +
-            v["height"] / 9 +
-            v["mass"] / 3 +
-            v["fullness"] / 3
-        )
-        self.scores["group_scores"]["vision_score"] = score
-        return score
+        geometric_score = (v["width_top"] + v["width_bottom"] + v["height"]) / 9
+        physical_score = (v["mass"] + v["fullness"]) / 3
+        return geometric_score + physical_score
 
     def compute_robot_score(self) -> float:
         r = self.scores["robot"]
@@ -400,23 +470,37 @@ class CorsmalEvaluationToolkit:
         self.scores["group_scores"]["robot_score"] = score
         return score
 
-    def compute_task_score(self, lambdas: Optional[dict] = None) -> float:
+    def compute_task_score(self, lambdas: Optional[Union[dict, list]] = None) -> float:
         """
-        Compute the task group score.
-        If lambdas are provided, use weighted sum; otherwise use DEFAULT_LAMBDAS.
+        Compute task score with optional custom lambda weights.
+        
+        Args:
+            lambdas: Either dict with keys matching task metrics OR list of 14 elements
+                    (indices 0-13 for s1-s14, using None for missing metrics).
         """
         t = self.scores["task"]
-
-        # Use default lambdas if none provided
+        
         if lambdas is None:
             lambdas = self.DEFAULT_LAMBDAS
-
-        # Validate lambda keys
+        
+        if isinstance(lambdas, list):
+            if len(lambdas) < 14:
+                raise ValueError("List lambdas must have at least 14 elements (s1-s14)")
+            # Map list indices to task metrics (indices 8,10,11,12,13 → s9,s11,s12,s13,s14)
+            lambda_dict = {
+                "delivery_location": lambdas[8],       # s9
+                "delivery_mass_filling": lambdas[10],  # s11
+                "time_human_maneuvering": lambdas[11], # s12
+                "time_handover": lambdas[12],          # s13
+                "time_robot_maneuvering": lambdas[13]  # s14
+            }
+            lambdas = lambda_dict
+        
+        # Validate keys
         for key in lambdas:
             if key not in t:
                 raise ValueError(f"Invalid lambda key: {key}")
-
-        # Weighted sum
+        
         score = sum(lambdas[k] * t[k] for k in lambdas)
         self.scores["group_scores"]["task_score"] = score
         return score

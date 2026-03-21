@@ -1,7 +1,13 @@
 #!/usr/bin/env python
 #
 # Evaluation script for the CORSMAL Benchmark
-# Refer to: https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8968407
+
+# Refer to:
+# Sanchez-Matilla, R., Chatzilygeroudis, K., Modas, A., Ferreira Duarte, N., Xompero, A., 
+# Frossard, P., Billard, A., & Cavallaro, A. (2020).
+# Benchmark for Human-to-Robot Handovers of Unseen Containers with Unknown Filling.
+# IEEE Robotics and Automation Letters, 5(2), 1642-1649.
+# https://doi.org/10.1109/LRA.2020.2969200
 #
 ################################################################################## 
 # Authors: 

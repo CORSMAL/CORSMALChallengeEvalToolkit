@@ -5,7 +5,6 @@
 ################################################################################## 
 # Author: 
 #   - Alessio Xompero: a.xompero@qmul.ac.uk
-#         Email: corsmal-challenge@qmul.ac.uk
 #
 #  Created Date: 2020/08/25
 # Modified Date: 2021/11/07

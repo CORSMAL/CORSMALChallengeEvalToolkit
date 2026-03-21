@@ -7,14 +7,12 @@
 # - Alessio Xompero
 # - Xavier Weber
 # 
-# Email: corsmal-challenge@qmul.ac.uk
-#
 #  Created Date: 2020/08/25
-# Modified Date: 2023/01/09
+# Modified Date: 2026/03/20
 #
 # MIT License
 
-# Copyright (c) 2023 CORSMAL
+# Copyright (c) 2023-2026 CORSMAL
 
 # Permission is hereby granted, free of charge, to any person obtaining a 
 # copy of this software and associated documentation files (the "Software"), 
