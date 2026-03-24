@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cup Dataset Schema",
+  "type": "object",
+  "required": ["metadata", "cups"],
+
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["version", "scales"],
+      "properties": {
+        "version": { "type": "string" },
+        "scales": {
+          "type": "object",
+          "required": ["deformability", "transparency"],
+          "properties": {
+            "deformability": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "transparency": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          }
+        }
+      }
+    },
+
+    "cups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "deformability",
+          "transparency",
+          "width_top_cm",
+          "width_bottom_cm",
+          "height_cm",
+          "weight_g",
+          "volume_ml",
+          "filling_amount_ml"
+        ],
+
+        "properties": {
+          "id": { "type": "string" },
+
+          "deformability": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          },
+
+          "transparency": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2
+          },
+
+          "width_top_cm": { "type": "number", "minimum": 0 },
+          "width_bottom_cm": { "type": "number", "minimum": 0 },
+          "height_cm": { "type": "number", "minimum": 0 },
+          "weight_g": { "type": "number", "minimum": 0 },
+          "volume_ml": { "type": "number", "minimum": 0 },
+          "filling_amount_ml": { "type": "number", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

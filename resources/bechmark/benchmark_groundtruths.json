@@ -1,0 +1,55 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "scales": {
+      "deformability": ["none", "low", "medium", "high"],
+      "transparency": ["low", "medium", "high"]
+    }
+  },
+  "cups": [
+    {
+      "id": "cup1",
+      "deformability": 3,
+      "transparency": 1,
+      "width_top_cm": 7.2,
+      "width_bottom_cm": 4.3,
+      "height_cm": 8.2,
+      "weight_g": 2.0,
+      "volume_ml": 179.0,
+      "filling_amount_ml": 125.0
+    },
+    {
+      "id": "cup2",
+      "deformability": 2,
+      "transparency": 0,
+      "width_top_cm": 9.7,
+      "width_bottom_cm": 6.1,
+      "height_cm": 12.1,
+      "weight_g": 10.0,
+      "volume_ml": 497.0,
+      "filling_amount_ml": 400.0
+    },
+    {
+      "id": "cup3",
+      "deformability": 2,
+      "transparency": 2,
+      "width_top_cm": 9.9,
+      "width_bottom_cm": 6.5,
+      "height_cm": 13.6,
+      "weight_g": 9.0,
+      "volume_ml": 605.0,
+      "filling_amount_ml": 450.0
+    },
+    {
+      "id": "cup4",
+      "deformability": 0,
+      "transparency": 2,
+      "width_top_cm": 8.0,
+      "width_bottom_cm": 6.5,
+      "height_cm": 13.5,
+      "weight_g": 134.0,
+      "volume_ml": 354.0,
+      "filling_amount_ml": 300.0
+    }
+  ]
+}
