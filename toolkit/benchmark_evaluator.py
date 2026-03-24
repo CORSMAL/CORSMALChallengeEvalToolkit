@@ -107,13 +107,22 @@ class CorsmalEvaluationToolkit:
 
     # -------------------------
     # Default λ weights from paper (sum to 1)
+    # Paper indices 1-13 map to code indices 0-12
     # -------------------------
     DEFAULT_LAMBDAS = {
-        "delivery_location": 0.20,         # λ9
-        "delivery_mass_filling": 0.20,     # λ11
-        "time_human_maneuvering": 0.20,    # λ12
-        "time_handover": 0.20,             # λ13
-        "time_robot_maneuvering": 0.20     # λ14
+        "width_top": 1/9,                      # λ1 (index 0)
+        "width_bottom": 1/9,                   # λ2 (index 1)
+        "height": 1/9,                         # λ3 (index 2)
+        "mass_vision": 1/3,                    # λ4 (index 3)
+        "fullness": 1/3,                       # λ5 (index 4)
+        "mass_robot": 1/3,                     # λ6 (index 5)
+        "hand_pose": 1/3,                      # λ7 (index 6)
+        "end_effector": 1/3,                   # λ8 (index 7)
+        "delivery_location": 1/3,              # λ9 (index 8)
+        "delivery_mass_filling": 1/3,          # λ10 (index 9)
+        "time_human_maneuvering": 1/12,        # λ11 (index 10)
+        "time_handover": 1/6,                  # λ12 (index 11)
+        "time_robot_maneuvering": 1/12         # λ13 (index 12)
     }
 
     # -------------------------
@@ -347,20 +356,97 @@ class CorsmalEvaluationToolkit:
         else:
             return float(score.flat[0])
 
-    def compute_score_type_2(self, a: Number, eta: float) -> Number:
+    def compute_score_type_2(self, a: Number, eta: float,
+                        return_array: bool = False) -> Union[float, np.ndarray]:
         """
-        Sigma score type 2: threshold-based scoring.
-
+        Sigma_2 (σ₂): Threshold-based scoring.
+        
+        σ₂(a, η) = { 1 - a/η,  if a < η
+                    { 0.0,      if a ≥ η
+        
         Args:
-            a: Predicted error(s).
-            eta: Threshold value.
-
+            a: Predicted error(s). Must be ≥ 0.
+            eta: Threshold value. Must be > 0.
+            return_array: If True, always return array; else float for scalar.
+        
         Returns:
-            Score(s) between 0 and 1.
+            Score(s) in [0, 1].
+        
+        Raises:
+            ValueError: If eta ≤ 0, a < 0, or a is empty.
         """
+        # Validate threshold
+        if not isinstance(eta, (int, float)) or eta <= 0:
+            raise ValueError(f"Threshold eta must be > 0, got {eta}")
+        
+        # Convert and validate errors
         a = np.asarray(a, dtype=float)
+        
+        if a.size == 0:
+            raise ValueError("Empty predictions array")
+        
+        if np.any(a < 0):
+            raise ValueError(f"Errors must be ≥ 0, got min={np.min(a)}")
+        
+        if np.any(np.isinf(a) | np.isnan(a)):
+            raise ValueError("Errors contain NaN/Inf")
+        
+        # Remember scalar input
+        is_scalar = (a.ndim == 0)
+        a = np.atleast_1d(a)
+        
+        # Compute scores
         score = np.where(a < eta, 1 - (a / eta), 0.0)
-        return score if score.size > 1 else float(score)
+        score = np.clip(score, 0.0, 1.0)
+        
+        # Return type
+        if return_array or not is_scalar:
+            return score
+        else:
+            return float(score.flat[0])
+
+    def compute_score_type_2_smooth(self, a: Number, eta: float,
+                                transition_width: float = 0.1) -> Union[float, np.ndarray]:
+        """
+        Sigma_2 with smooth transition around threshold (reduces hard boundary).
+        """
+        if eta <= 0:
+            raise ValueError(f"Threshold eta must be > 0")
+        
+        a = np.asarray(a, dtype=float)
+        if np.any(a < 0):
+            raise ValueError(f"Errors must be ≥ 0")
+        if transition_width <= 0 or transition_width >= 1:
+            raise ValueError(f"transition_width must be in (0, 1)")
+        
+        is_scalar = (a.ndim == 0)
+        a = np.atleast_1d(a)
+        
+        eta_lower = eta * (1 - transition_width)
+        eta_upper = eta * (1 + transition_width)
+        
+        score = np.ones_like(a, dtype=float)
+        
+        # Linear region
+        mask_linear = a < eta_lower
+        score[mask_linear] = 1 - (a[mask_linear] / eta)
+        
+        # Transition region (cubic smoothing)
+        mask_trans = (a >= eta_lower) & (a <= eta_upper)
+        if np.any(mask_trans):
+            t = (a[mask_trans] - eta_lower) / (eta_upper - eta_lower)
+            score[mask_trans] = 1 - (3*t**2 - 2*t**3)
+        
+        # Zero region
+        mask_zero = a > eta_upper
+        score[mask_zero] = 0.0
+        
+        score = np.clip(score, 0.0, 1.0)
+        
+        if is_scalar:
+            return float(score.flat[0])
+        else:
+            return score
 
     def compute_score_type_3(self, P: np.ndarray, P_hat: np.ndarray, epsilon: float) -> float:
         """
@@ -438,9 +524,18 @@ class CorsmalEvaluationToolkit:
         return self.compute_score_type_1(np.array(preds), np.array(gts))
 
     def compute_mass_robot(self, preds: Iterable[float], gts: Iterable[float]) -> float:
-        self.check_length_preds_gts(preds, gts)
+        """s6: Compute score for robot mass estimation."""
+        preds = list(preds)
+        gts = list(gts)
+        
+        # Check empty FIRST before checking length
         if not preds:
             raise ValueError("Empty predictions list for mass_robot computation.")
+        if not gts:
+            raise ValueError("Empty ground truth list for mass_robot computation.")
+        
+        # Then check lengths match
+        self.check_length_preds_gts(preds, gts)
         scores = [self.compute_score_type_1(p, g) for p, g in zip(preds, gts)]
         return float(np.mean(scores))
 
@@ -519,7 +614,9 @@ class CorsmalEvaluationToolkit:
         v = self.scores["vision"]
         geometric_score = (v["width_top"] + v["width_bottom"] + v["height"]) / 9
         physical_score = (v["mass"] + v["fullness"]) / 3
-        return geometric_score + physical_score
+        vision_score = geometric_score + physical_score
+        self.scores["group_scores"]["vision_score"] = vision_score
+        return vision_score
 
     def compute_robot_score(self) -> float:
         r = self.scores["robot"]
@@ -528,39 +625,28 @@ class CorsmalEvaluationToolkit:
         return score
 
     def compute_task_score(self, lambdas: Optional[Union[dict, list]] = None) -> float:
-        """
-        Compute task score with optional custom lambda weights.
-        
-        Args:
-            lambdas: Either dict with keys matching task metrics OR list of 14 elements
-                    (indices 0-13 for s1-s14, using None for missing metrics).
-        """
+        """Compute task score from 5 task metrics only."""
         t = self.scores["task"]
         
         if lambdas is None:
-            lambdas = self.DEFAULT_LAMBDAS
+            lambdas = {"delivery_location": 0.2, "delivery_mass_filling": 0.2,
+                    "time_human_maneuvering": 0.2, "time_handover": 0.2,
+                    "time_robot_maneuvering": 0.2}
         
         if isinstance(lambdas, list):
-            if len(lambdas) < 14:
-                raise ValueError("List lambdas must have at least 14 elements (s1-s14)")
-            # Map list indices to task metrics (indices 8,10,11,12,13 → s9,s11,s12,s13,s14)
-            lambda_dict = {
-                "delivery_location": lambdas[8],       # s9
-                "delivery_mass_filling": lambdas[10],  # s11
-                "time_human_maneuvering": lambdas[11], # s12
-                "time_handover": lambdas[12],          # s13
-                "time_robot_maneuvering": lambdas[13]  # s14
-            }
-            lambdas = lambda_dict
+            if len(lambdas) != 5:
+                raise ValueError("List lambdas must have exactly 5 elements")
+            lambdas = {"delivery_location": lambdas[0], "delivery_mass_filling": lambdas[1],
+                    "time_human_maneuvering": lambdas[2], "time_handover": lambdas[3],
+                    "time_robot_maneuvering": lambdas[4]}
         
-        # Validate keys
         for key in lambdas:
             if key not in t:
                 raise ValueError(f"Invalid lambda key: {key}")
         
         score = sum(lambdas[k] * t[k] for k in lambdas)
-        self.scores["group_scores"]["task_score"] = score
-        return score
+        self.scores["group_scores"]["task_score"] = float(score)
+        return float(score)
 
     def compute_benchmark_score(self) -> float:
         g = self.scores["group_scores"]
