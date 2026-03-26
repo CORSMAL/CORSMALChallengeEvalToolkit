@@ -90,9 +90,28 @@ FILLING_DENSITY = {
 # CORSMAL benchmark thresholds (from paper)
 DELIVERY_LOCATION_THRESHOLD_MM = 50.0      # Distance from target
 DELIVERY_MASS_THRESHOLD_G = 50.0           # Mass tolerance
-TIME_HUMAN_MANEUVERING_THRESHOLD_S = 10.0
-TIME_HANDOVER_THRESHOLD_S = 5.0
-TIME_ROBOT_MANEUVERING_THRESHOLD_S = 15.0
+# TIME_HUMAN_MANEUVERING_THRESHOLD_S = 10.0
+# TIME_HANDOVER_THRESHOLD_S = 5.0
+# TIME_ROBOT_MANEUVERING_THRESHOLD_S = 15.0
+
+
+TIMING_PARAMS = {
+    "human_maneuvring" : {
+        "plateau_th": 1500, # ms
+        "tau": 1500, # ms
+        "epsilon": 0.05
+    },
+    "handover" : {
+        "plateau_th": 400, # ms
+        "tau": 600, # ms
+        "epsilon": 0.05
+    },
+    "robot_maneuvring" : {
+        "plateau_th": 1500, # ms
+        "tau": 1500, # ms
+        "epsilon": 0
+    }
+}
 
 class CorsmalEvaluationToolkit:
     """
@@ -662,9 +681,30 @@ class CorsmalEvaluationToolkit:
         Run the benchmark evaluation by comparing predictions against ground truth.
         Stores results in self.scores.
         """
+        # required_columns = [
+        #     "w^i (mm)", "w^i_b (mm)", "h^i (mm)",
+        #     "m^i_v (grams)", "f^i (%)"
+        # ]
+        all_columns = [
+            "config_id", "robot_initial_pose_x", "robot_initial_pose_y", "robot_initial_pose_z", 
+            "robot_initial_pose_q1", "robot_initial_pose_q2", "robot_initial_pose_q3", 
+            "robot_initial_pose_q4", "initial_mass_measured_g", "width_top_est_mm_vision", 
+            "width_bottom_est_mm_vision", "height_est_mm_vision", "geometry_est_timepoint",
+            "mass_full_est_g_vision", "mass_full_est_vision_timepoint", "fill_level_est_percent_vision",
+            "fill_level_vision_timepoint", "spill_observed_during_human_maneuvering", 
+            "robot_mass_est_available", "robot_mass_est_g", "robot_mass_est_timepoint", 
+            "delivery_location_est_x_mm", "delivery_location_est_y_mm", "delivery_location_est_z_mm",
+            "final_mass_null_flag", "final_mass_measured_g", "t_human_first_contact_ms", 
+            "t_human_last_contact_ms", "t_robot_first_contact_ms", "t_robot_last_contact_ms"
+        ]
         required_columns = [
-            "w^i (mm)", "w^i_b (mm)", "h^i (mm)",
-            "m^i_v (grams)", "f^i (%)"
+            "initial_mass_measured_g", "width_top_est_mm_vision", 
+            "width_bottom_est_mm_vision", "height_est_mm_vision", 
+            "mass_full_est_g_vision", "fill_level_est_percent_vision",
+            "robot_mass_est_available", "robot_mass_est_g", 
+            "delivery_location_est_x_mm", "delivery_location_est_y_mm", "delivery_location_est_z_mm",
+            "final_mass_null_flag", "final_mass_measured_g", "t_human_first_contact_ms", 
+            "t_human_last_contact_ms", "t_robot_first_contact_ms", "t_robot_last_contact_ms"
         ]
         missing_cols = [col for col in required_columns if col not in df_pred.columns]
         if missing_cols:
@@ -673,27 +713,62 @@ class CorsmalEvaluationToolkit:
         try:
             # Vision metrics
             self.scores["vision"]["width_top"] = self.compute_width_top(
-                df_pred["w^i (mm)"],
-                self.get_measure_annotations(df_gts, "width_at_the_top", self.n_config_cup, self.n_subjects)
+                df_pred["width_top_est_mm_vision"],
+                df_gts["width_top"]
+                # self.get_measure_annotations(df_gts, "width_at_the_top", self.n_config_cup, self.n_subjects)
             )
 
             self.scores["vision"]["width_bottom"] = self.compute_width_bottom(
-                df_pred["w^i_b (mm)"],
-                self.get_measure_annotations(df_gts, "width_at_the_bottom", self.n_config_cup, self.n_subjects)
+                df_pred["width_bottom_est_mm_vision"],
+                df_gts["width_bottom"]
+                # self.get_measure_annotations(df_gts, "width_at_the_bottom", self.n_config_cup, self.n_subjects)
             )
 
             self.scores["vision"]["height"] = self.compute_height(
-                df_pred["h^i (mm)"],
-                self.get_measure_annotations(df_gts, "height", self.n_config_cup, self.n_subjects)
+                df_pred["height_est_mm_vision"],
+                df_gts["height"]
+                # self.get_measure_annotations(df_gts, "height", self.n_config_cup, self.n_subjects)
             )
 
             self.scores["vision"]["mass"] = self.compute_mass_vision(
-                df_pred["m^i_v (grams)"], None
+                df_pred["mass_full_est_g_vision"], 
+                df_pred["initial_mass_measured_g"], 
+                # None
             )
 
             self.scores["vision"]["fullness"] = self.compute_fullness(
-                df_pred["f^i (%)"],
-                self.get_measure_annotations(df_gts, "volume", self.n_config_cup, self.n_subjects)
+                df_pred["fill_level_est_percent_vision"],
+                df_gts["fullness"]
+                # self.get_measure_annotations(df_gts, "volume", self.n_config_cup, self.n_subjects)
+            )
+
+            # Robot metrics
+            self.scores["robot"]["mass"] = self.compute_mass_vision(
+                df_pred["robot_mass_est_g"], 
+                df_pred["initial_mass_measured_g"], 
+                # None
+            )
+
+            # Task metrics
+            self.scores["task"]["mass"] = self.compute_mass_vision(
+                df_pred["final_mass_measured_g"], 
+                df_pred["initial_mass_measured_g"], 
+                # None
+            )
+
+            self.scores["task"]["time_human_maneuvering"] = self.compute_time_human_maneuvering(
+                df_pred["t_robot_first_contact_ms"] - df_pred["t_human_first_contact_ms"],
+                TIMING_PARAMS["human_maneuvering"]["tau"]
+            )
+
+            self.scores["task"]["time_handover"] = self.compute_time_handover(
+                df_pred["t_human_last_contact_ms"] - df_pred["t_robot_first_contact_ms"],
+                TIMING_PARAMS["handover"]["tau"]
+            )
+
+            self.scores["task"]["time_robot_maneuvering"] = self.compute_time_robot_maneuvering(
+                df_pred["t_robot_last_contact_ms"] - df_pred["t_human_last_contact_ms"],
+                TIMING_PARAMS["robot_maneuvering"]["tau"]
             )
 
         except Exception as e:
@@ -764,3 +839,4 @@ class CorsmalEvaluationToolkit:
         Return a deep copy of all scores to prevent accidental modification.
         """
         return copy.deepcopy(self.scores)
+
