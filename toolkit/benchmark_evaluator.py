@@ -90,26 +90,23 @@ FILLING_DENSITY = {
 # CORSMAL benchmark thresholds (from paper)
 DELIVERY_LOCATION_THRESHOLD_MM = 50.0      # Distance from target
 DELIVERY_MASS_THRESHOLD_G = 50.0           # Mass tolerance
-# TIME_HUMAN_MANEUVERING_THRESHOLD_S = 10.0
-# TIME_HANDOVER_THRESHOLD_S = 5.0
-# TIME_ROBOT_MANEUVERING_THRESHOLD_S = 15.0
 
 
 TIMING_PARAMS = {
-    "human_maneuvring" : {
-        "plateau_th": 1500, # ms
-        "tau": 1500, # ms
+    "human_maneuvering": {
+        "plateau_th": 1500,  # ms
+        "tau": 1500,         # ms
         "epsilon": 0.05
     },
-    "handover" : {
-        "plateau_th": 400, # ms
-        "tau": 600, # ms
+    "handover": {
+        "plateau_th": 400,   # ms
+        "tau": 600,          # ms
         "epsilon": 0.05
     },
-    "robot_maneuvring" : {
-        "plateau_th": 1500, # ms
-        "tau": 1500, # ms
-        "epsilon": 0
+    "robot_maneuvering": {
+        "plateau_th": 1500,  # ms
+        "tau": 1500,         # ms
+        "epsilon": 0.0
     }
 }
 
@@ -424,48 +421,87 @@ class CorsmalEvaluationToolkit:
         else:
             return float(score.flat[0])
 
-    def compute_score_type_2_smooth(self, a: Number, eta: float,
-                                transition_width: float = 0.1) -> Union[float, np.ndarray]:
+
+    def compute_score_type_2_plateau(self,
+                                    a: Number,
+                                    eta: float,
+                                    plateau_th: float,
+                                    epsilon: float,
+                                    return_array: bool = False) -> Union[float, np.ndarray]:
         """
-        Sigma_2 with smooth transition around threshold (reduces hard boundary).
+        Plateau + exponential decay scoring with clamp.
+
+        Behaviour (all times in same units as inputs, e.g., ms):
+        - if a <= plateau_th: score = 1.0
+        - elif plateau_th < a < a_cut: score = exp(-(a - plateau_th) / eta)
+        - else (a >= a_cut): score = 0.0
+
+        where a_cut = plateau_th - eta * ln(epsilon)  (since 0 < epsilon < 1, a_cut > plateau_th)
+
+        Args:
+            a: measured time(s) (>= 0). Scalar or array-like.
+            eta: decay time constant (tau). Must be > 0.
+            plateau_th: plateau end a0 (>= 0).
+            epsilon: small clamp level in (0,1) (e.g., 1e-3 or 0.05). Defines a_cut.
+            return_array: if True always return numpy array; otherwise return scalar for scalar input.
+
+        Returns:
+            score(s) in [0,1] (float or numpy array).
+
+        Raises:
+            ValueError on invalid inputs.
         """
-        if eta <= 0:
-            raise ValueError(f"Threshold eta must be > 0")
-        
-        a = np.asarray(a, dtype=float)
-        if np.any(a < 0):
-            raise ValueError(f"Errors must be ≥ 0")
-        if transition_width <= 0 or transition_width >= 1:
-            raise ValueError(f"transition_width must be in (0, 1)")
-        
-        is_scalar = (a.ndim == 0)
-        a = np.atleast_1d(a)
-        
-        eta_lower = eta * (1 - transition_width)
-        eta_upper = eta * (1 + transition_width)
-        
-        score = np.ones_like(a, dtype=float)
-        
-        # Linear region
-        mask_linear = a < eta_lower
-        score[mask_linear] = 1 - (a[mask_linear] / eta)
-        
-        # Transition region (cubic smoothing)
-        mask_trans = (a >= eta_lower) & (a <= eta_upper)
-        if np.any(mask_trans):
-            t = (a[mask_trans] - eta_lower) / (eta_upper - eta_lower)
-            score[mask_trans] = 1 - (3*t**2 - 2*t**3)
-        
-        # Zero region
-        mask_zero = a > eta_upper
-        score[mask_zero] = 0.0
-        
+        # Validate numeric parameters
+        if not isinstance(eta, (int, float)) or eta <= 0:
+            raise ValueError(f"eta (decay constant) must be > 0, got {eta}")
+        if not isinstance(plateau_th, (int, float)) or plateau_th < 0:
+            raise ValueError(f"plateau_th must be >= 0, got {plateau_th}")
+        if not isinstance(epsilon, (int, float)) or not (0.0 < epsilon < 1.0):
+            raise ValueError(f"epsilon must be in (0,1), got {epsilon}")
+
+        # Convert and validate a
+        a_arr = np.asarray(a, dtype=float)
+        # detect scalar input robustly
+        is_scalar = (a_arr.ndim == 0)
+        # make 1-D for vectorised ops
+        a_vec = np.atleast_1d(a_arr)
+
+        if a_vec.size == 0:
+            raise ValueError("Empty predictions array")
+
+        if np.any(np.isnan(a_vec) | np.isinf(a_vec)):
+            raise ValueError("Errors contain NaN/Inf")
+
+        if np.any(a_vec < 0):
+            raise ValueError(f"Errors must be ≥ 0, got min={np.min(a_vec)}")
+
+        # compute clamp point (a_cut)
+        a_cut = plateau_th - eta * np.log(epsilon)  # a_cut > plateau_th
+
+        # prepare output
+        score = np.zeros_like(a_vec, dtype=float)
+
+        # plateau region: full score
+        mask_plateau = (a_vec <= plateau_th)
+        score[mask_plateau] = 1.0
+
+        # exponential decay region: plateau_th < a < a_cut
+        mask_decay = (a_vec > plateau_th) & (a_vec < a_cut)
+        if np.any(mask_decay):
+            # exponential decay from plateau_th with time constant eta
+            score[mask_decay] = np.exp(-(a_vec[mask_decay] - plateau_th) / eta)
+
+        # values >= a_cut remain zero (hard clamp)
+        # clip for numerical safety
         score = np.clip(score, 0.0, 1.0)
-        
-        if is_scalar:
-            return float(score.flat[0])
-        else:
+
+        # return scalar or array according to inputs and return_array flag
+        if return_array or not is_scalar:
             return score
+        else:
+            return float(score[0])
+
+        
 
     def compute_score_type_3(self, P: np.ndarray, P_hat: np.ndarray, epsilon: float) -> float:
         """
@@ -581,7 +617,8 @@ class CorsmalEvaluationToolkit:
         preds = list(preds)
         if not preds:
             raise ValueError("Empty predictions list for task metric.")
-        return float(np.mean([self.compute_score_type_2(p, thr) for p in preds]))
+        # return float(np.mean([self.compute_score_type_2(p, thr) for p in preds]))
+        return float(np.mean([self.compute_score_type_2_plateau(p, thr) for p in preds]))
     
     def compute_delivery_location(self, preds_mm: Iterable[float], thr_mm: float) -> float:
         """s9: Delivery location error in mm."""
@@ -681,22 +718,18 @@ class CorsmalEvaluationToolkit:
         Run the benchmark evaluation by comparing predictions against ground truth.
         Stores results in self.scores.
         """
-        # required_columns = [
-        #     "w^i (mm)", "w^i_b (mm)", "h^i (mm)",
-        #     "m^i_v (grams)", "f^i (%)"
+        # all_columns = [
+        #     "config_id", "robot_initial_pose_x", "robot_initial_pose_y", "robot_initial_pose_z", 
+        #     "robot_initial_pose_q1", "robot_initial_pose_q2", "robot_initial_pose_q3", 
+        #     "robot_initial_pose_q4", "initial_mass_measured_g", "width_top_est_mm_vision", 
+        #     "width_bottom_est_mm_vision", "height_est_mm_vision", "geometry_est_timepoint",
+        #     "mass_full_est_g_vision", "mass_full_est_vision_timepoint", "fill_level_est_percent_vision",
+        #     "fill_level_vision_timepoint", "spill_observed_during_human_maneuvering", 
+        #     "robot_mass_est_available", "robot_mass_est_g", "robot_mass_est_timepoint", 
+        #     "delivery_location_est_x_mm", "delivery_location_est_y_mm", "delivery_location_est_z_mm",
+        #     "final_mass_null_flag", "final_mass_measured_g", "t_human_first_contact_ms", 
+        #     "t_human_last_contact_ms", "t_robot_first_contact_ms", "t_robot_last_contact_ms"
         # ]
-        all_columns = [
-            "config_id", "robot_initial_pose_x", "robot_initial_pose_y", "robot_initial_pose_z", 
-            "robot_initial_pose_q1", "robot_initial_pose_q2", "robot_initial_pose_q3", 
-            "robot_initial_pose_q4", "initial_mass_measured_g", "width_top_est_mm_vision", 
-            "width_bottom_est_mm_vision", "height_est_mm_vision", "geometry_est_timepoint",
-            "mass_full_est_g_vision", "mass_full_est_vision_timepoint", "fill_level_est_percent_vision",
-            "fill_level_vision_timepoint", "spill_observed_during_human_maneuvering", 
-            "robot_mass_est_available", "robot_mass_est_g", "robot_mass_est_timepoint", 
-            "delivery_location_est_x_mm", "delivery_location_est_y_mm", "delivery_location_est_z_mm",
-            "final_mass_null_flag", "final_mass_measured_g", "t_human_first_contact_ms", 
-            "t_human_last_contact_ms", "t_robot_first_contact_ms", "t_robot_last_contact_ms"
-        ]
         required_columns = [
             "initial_mass_measured_g", "width_top_est_mm_vision", 
             "width_bottom_est_mm_vision", "height_est_mm_vision", 
@@ -757,17 +790,17 @@ class CorsmalEvaluationToolkit:
             )
 
             self.scores["task"]["time_human_maneuvering"] = self.compute_time_human_maneuvering(
-                df_pred["t_robot_first_contact_ms"] - df_pred["t_human_first_contact_ms"],
+                df_pred["t_robot_first_contact_ms"].to_numpy() - df_pred["t_human_first_contact_ms"].to_numpy(),
                 TIMING_PARAMS["human_maneuvering"]["tau"]
             )
 
             self.scores["task"]["time_handover"] = self.compute_time_handover(
-                df_pred["t_human_last_contact_ms"] - df_pred["t_robot_first_contact_ms"],
+                df_pred["t_human_last_contact_ms"].to_numpy() - df_pred["t_robot_first_contact_ms"].to_numpy(),
                 TIMING_PARAMS["handover"]["tau"]
             )
 
             self.scores["task"]["time_robot_maneuvering"] = self.compute_time_robot_maneuvering(
-                df_pred["t_robot_last_contact_ms"] - df_pred["t_human_last_contact_ms"],
+                df_pred["t_robot_last_contact_ms"].to_numpy() - df_pred["t_human_last_contact_ms"].to_numpy(),
                 TIMING_PARAMS["robot_maneuvering"]["tau"]
             )
 
