@@ -495,6 +495,7 @@ def run_benchmark_evaluation(args) -> dict:
             "vision_score": evaluator.get_vision_score(),
             "robot_score": evaluator.get_robot_score(),
             "task_score": evaluator.get_task_score(),
+            "team" : report["metadata"]["team"]
         }
         
         logger.info("✓ Benchmark evaluation completed successfully")
@@ -556,57 +557,113 @@ def ensure_output_directory(output_dir: str) -> str:
     logger.info(f"Output directory ready: {output_dir}")
     return output_dir
  
- 
-def save_results(results: dict, output_dir: str, output_format: str = "csv") -> None:
+
+from datetime import datetime
+def save_results(results: dict, output_dir: str) -> None:
     """
-    Save evaluation results to file(s).
-    
+    Save evaluation results to CSV file.
+
     Args:
         results: Dictionary of results from evaluation
         output_dir: Directory to save results
-        output_format: Format to save in ("json", "csv", or "both")
     """
     ensure_output_directory(output_dir)
-    
+
     scores = results.get("individual_scores", {})
-    
+
+    # Stable schemas
+    VISION_SCHEMA = ["width_top", "width_bottom", "height", "mass", "fullness"]
+    ROBOT_SCHEMA = ["mass_robot", "hand_pose", "end_effector"]
+    TASK_SCHEMA = [
+        "delivery_location",
+        "delivery_mass_filling",
+        "time_human_maneuvering",
+        "time_handover",
+        "time_robot_maneuvering"
+    ]
+
     try:
-        if output_format in ["csv", "both"]:
-            # Save vision scores
-            if "vision" in scores:
-                vision_df = pd.DataFrame([scores["vision"]], index=["scores"])
-                vision_df.to_csv(os.path.join(output_dir, "vision_scores.csv"))
-            
-            # Save robot scores
-            if "robot" in scores:
-                robot_df = pd.DataFrame([scores["robot"]], index=["scores"])
-                robot_df.to_csv(os.path.join(output_dir, "robot_scores.csv"))
-            
-            # Save task scores
-            if "task" in scores:
-                task_df = pd.DataFrame([scores["task"]], index=["scores"])
-                task_df.to_csv(os.path.join(output_dir, "task_scores.csv"))
-            
-            # Save summary
-            summary_df = pd.DataFrame({
-                "Score Type": ["Vision", "Robot", "Task", "Benchmark"],
-                "Score": [
-                    results.get("vision_score", 0.0),
-                    results.get("robot_score", 0.0),
-                    results.get("task_score", 0.0),
-                    results.get("benchmark_score", 0.0)
-                ]
-            })
-            summary_df.to_csv(os.path.join(output_dir, "summary_scores.csv"), index=False)
-            logger.info("✓ Results saved to CSV format")
-        
-        if output_format in ["json", "both"]:
-            # Convert numpy types to native Python types for JSON serialization
-            results_json = json.loads(json.dumps(results, default=str))
-            with open(os.path.join(output_dir, "evaluation_results.json"), "w") as f:
-                json.dump(results_json, f, indent=2)
-            logger.info("✓ Results saved to JSON format")
-            
+        # --- Vision ---
+        if "vision" in scores:
+            vision_df = pd.DataFrame([scores["vision"]], index=["scores"])
+        else:
+            vision_df = pd.DataFrame(
+                {k: 0.0 for k in VISION_SCHEMA},
+                index=["scores"]
+            )
+
+        # --- Robot ---
+        if "robot" in scores:
+            robot_df = pd.DataFrame([scores["robot"]], index=["scores"])
+        else:
+            robot_df = pd.DataFrame(
+                {k: 0.0 for k in ROBOT_SCHEMA},
+                index=["scores"]
+            )
+
+        # --- Task ---
+        if "task" in scores:
+            task_df = pd.DataFrame([scores["task"]], index=["scores"])
+        else:
+            task_df = pd.DataFrame(
+                {k: 0.0 for k in TASK_SCHEMA},
+                index=["scores"]
+            )
+
+        # --- Group scores ---
+        groups_df = pd.DataFrame(
+            {
+                "vision_score": [results.get("vision_score", 0.0)],
+                "robot_score": [results.get("robot_score", 0.0)],
+                "task_score": [results.get("task_score", 0.0)],
+                "benchmark_score": [results.get("benchmark_score", 0.0)]
+            },
+            index=["scores"]
+        )
+
+        # --- Metadata ---
+        info_res = pd.DataFrame(
+            {
+                "Timestamp": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+                "team": [results.get("team", "unknown")]
+            },
+            index=["scores"]
+        )
+
+        # --- Final concatenation ---
+        summary_df = pd.concat(
+            [info_res, vision_df, robot_df, task_df, groups_df],
+            axis=1
+        )
+
+        # --- Convert numeric columns (except Timestamp and team) to percentage strings ---
+        exclude_cols = {"Timestamp", "team"}
+        for col in summary_df.columns:
+            if col in exclude_cols:
+                continue
+
+            def _to_percent_str(val):
+                if pd.isna(val):
+                    return ""
+                try:
+                    num = float(val)
+                except Exception:
+                    return str(val)
+                # Multiply by 100 and format with two decimals
+                return f"{num * 100:.2f}%"
+
+            summary_df[col] = summary_df[col].apply(_to_percent_str)
+
+        # --- Append to CSV if exists, otherwise create with header ---
+        out_path = os.path.join(output_dir, "scores_res.csv")
+        file_exists = os.path.exists(out_path)
+
+        # Use mode 'a' to append; write header only if file does not exist
+        summary_df.to_csv(out_path, mode="a", header=not file_exists, index=False)
+
+
+        logger.info("✓ Results saved to CSV format")
+
     except Exception as e:
         logger.error(f"Failed to save results: {e}")
         raise
@@ -741,12 +798,6 @@ def get_parser() -> ArgumentParser:
         action="store_true",
         help="Save detailed per-trial results and aggregated statistics."
     )
-    parser.add_argument(
-        "--output_format",
-        choices=["json", "csv", "both"],
-        default="csv",
-        help="Output format for results."
-    )
  
     # Advanced Options
     parser.add_argument(
@@ -822,7 +873,7 @@ if __name__ == "__main__":
             
             # Save results if output directory specified
             if args.output_dir:
-                save_results(results, args.output_dir, args.output_format)
+                save_results(results, args.output_dir)
                 logger.info(f"Results saved to: {args.output_dir}")
  
         logger.info("Evaluation completed successfully")
