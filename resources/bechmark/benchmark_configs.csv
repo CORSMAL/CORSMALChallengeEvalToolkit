@@ -1,289 +1,289 @@
-configuration,cup,filling (ml),grasp type,handover location,subject
-1,1,0,1,1
-2,1,0,1,2
-3,1,0,1,3
-4,1,0,2,1
-5,1,0,2,2
-6,1,0,2,3
-7,1,0,3,1
-8,1,0,3,2
-9,1,0,3,3
-10,1,125,1,1
-11,1,125,1,2
-12,1,125,1,3
-13,1,125,2,1
-14,1,125,2,2
-15,1,125,2,3
-16,1,125,3,1
-17,1,125,3,2
-18,1,125,3,3
-19,2,0,1,1
-20,2,0,1,2
-21,2,0,1,3
-22,2,0,2,1
-23,2,0,2,2
-24,2,0,2,3
-25,2,0,3,1
-26,2,0,3,2
-27,2,0,3,3
-28,2,400,1,1
-29,2,400,1,2
-30,2,400,1,3
-31,2,400,2,1
-32,2,400,2,2
-33,2,400,2,3
-34,2,400,3,1
-35,2,400,3,2
-36,2,400,3,3
-37,3,0,1,1
-38,3,0,1,2
-39,3,0,1,3
-40,3,0,2,1
-41,3,0,2,2
-42,3,0,2,3
-43,3,0,3,1
-44,3,0,3,2
-45,3,0,3,3
-46,3,450,1,1
-47,3,450,1,2
-48,3,450,1,3
-49,3,450,2,1
-50,3,450,2,2
-51,3,450,2,3
-52,3,450,3,1
-53,3,450,3,2
-54,3,450,3,3
-55,4,0,1,1
-56,4,0,1,2
-57,4,0,1,3
-58,4,0,2,1
-59,4,0,2,2
-60,4,0,2,3
-61,4,0,3,1
-62,4,0,3,2
-63,4,0,3,3
-64,4,300,1,1
-65,4,300,1,2
-66,4,300,1,3
-67,4,300,2,1
-68,4,300,2,2
-69,4,300,2,3
-70,4,300,3,1
-71,4,300,3,2
-72,4,300,3,3
-73,1,0,1,1
-74,1,0,1,2
-75,1,0,1,3
-76,1,0,2,1
-77,1,0,2,2
-78,1,0,2,3
-79,1,0,3,1
-80,1,0,3,2
-81,1,0,3,3
-82,1,125,1,1
-83,1,125,1,2
-84,1,125,1,3
-85,1,125,2,1
-86,1,125,2,2
-87,1,125,2,3
-88,1,125,3,1
-89,1,125,3,2
-90,1,125,3,3
-91,2,0,1,1
-92,2,0,1,2
-93,2,0,1,3
-94,2,0,2,1
-95,2,0,2,2
-96,2,0,2,3
-97,2,0,3,1
-98,2,0,3,2
-99,2,0,3,3
-100,2,400,1,1
-101,2,400,1,2
-102,2,400,1,3
-103,2,400,2,1
-104,2,400,2,2
-105,2,400,2,3
-106,2,400,3,1
-107,2,400,3,2
-108,2,400,3,3
-109,3,0,1,1
-110,3,0,1,2
-111,3,0,1,3
-112,3,0,2,1
-113,3,0,2,2
-114,3,0,2,3
-115,3,0,3,1
-116,3,0,3,2
-117,3,0,3,3
-118,3,450,1,1
-119,3,450,1,2
-120,3,450,1,3
-121,3,450,2,1
-122,3,450,2,2
-123,3,450,2,3
-124,3,450,3,1
-125,3,450,3,2
-126,3,450,3,3
-127,4,0,1,1
-128,4,0,1,2
-129,4,0,1,3
-130,4,0,2,1
-131,4,0,2,2
-132,4,0,2,3
-133,4,0,3,1
-134,4,0,3,2
-135,4,0,3,3
-136,4,300,1,1
-137,4,300,1,2
-138,4,300,1,3
-139,4,300,2,1
-140,4,300,2,2
-141,4,300,2,3
-142,4,300,3,1
-143,4,300,3,2
-144,4,300,3,3
-145,1,0,1,1
-146,1,0,1,2
-147,1,0,1,3
-148,1,0,2,1
-149,1,0,2,2
-150,1,0,2,3
-151,1,0,3,1
-152,1,0,3,2
-153,1,0,3,3
-154,1,125,1,1
-155,1,125,1,2
-156,1,125,1,3
-157,1,125,2,1
-158,1,125,2,2
-159,1,125,2,3
-160,1,125,3,1
-161,1,125,3,2
-162,1,125,3,3
-163,2,0,1,1
-164,2,0,1,2
-165,2,0,1,3
-166,2,0,2,1
-167,2,0,2,2
-168,2,0,2,3
-169,2,0,3,1
-170,2,0,3,2
-171,2,0,3,3
-172,2,400,1,1
-173,2,400,1,2
-174,2,400,1,3
-175,2,400,2,1
-176,2,400,2,2
-177,2,400,2,3
-178,2,400,3,1
-179,2,400,3,2
-180,2,400,3,3
-181,3,0,1,1
-182,3,0,1,2
-183,3,0,1,3
-184,3,0,2,1
-185,3,0,2,2
-186,3,0,2,3
-187,3,0,3,1
-188,3,0,3,2
-189,3,0,3,3
-190,3,450,1,1
-191,3,450,1,2
-192,3,450,1,3
-193,3,450,2,1
-194,3,450,2,2
-195,3,450,2,3
-196,3,450,3,1
-197,3,450,3,2
-198,3,450,3,3
-199,4,0,1,1
-200,4,0,1,2
-201,4,0,1,3
-202,4,0,2,1
-203,4,0,2,2
-204,4,0,2,3
-205,4,0,3,1
-206,4,0,3,2
-207,4,0,3,3
-208,4,300,1,1
-209,4,300,1,2
-210,4,300,1,3
-211,4,300,2,1
-212,4,300,2,2
-213,4,300,2,3
-214,4,300,3,1
-215,4,300,3,2
-216,4,300,3,3
-217,1,0,1,1
-218,1,0,1,2
-219,1,0,1,3
-220,1,0,2,1
-221,1,0,2,2
-222,1,0,2,3
-223,1,0,3,1
-224,1,0,3,2
-225,1,0,3,3
-226,1,125,1,1
-227,1,125,1,2
-228,1,125,1,3
-229,1,125,2,1
-230,1,125,2,2
-231,1,125,2,3
-232,1,125,3,1
-233,1,125,3,2
-234,1,125,3,3
-235,2,0,1,1
-236,2,0,1,2
-237,2,0,1,3
-238,2,0,2,1
-239,2,0,2,2
-240,2,0,2,3
-241,2,0,3,1
-242,2,0,3,2
-243,2,0,3,3
-244,2,400,1,1
-245,2,400,1,2
-246,2,400,1,3
-247,2,400,2,1
-248,2,400,2,2
-249,2,400,2,3
-250,2,400,3,1
-251,2,400,3,2
-252,2,400,3,3
-253,3,0,1,1
-254,3,0,1,2
-255,3,0,1,3
-256,3,0,2,1
-257,3,0,2,2
-258,3,0,2,3
-259,3,0,3,1
-260,3,0,3,2
-261,3,0,3,3
-262,3,450,1,1
-263,3,450,1,2
-264,3,450,1,3
-265,3,450,2,1
-266,3,450,2,2
-267,3,450,2,3
-268,3,450,3,1
-269,3,450,3,2
-270,3,450,3,3
-271,4,0,1,1
-272,4,0,1,2
-273,4,0,1,3
-274,4,0,2,1
-275,4,0,2,2
-276,4,0,2,3
-277,4,0,3,1
-278,4,0,3,2
-279,4,0,3,3
-280,4,300,1,1
-281,4,300,1,2
-282,4,300,1,3
-283,4,300,2,1
-284,4,300,2,2
-285,4,300,2,3
-286,4,300,3,1
-287,4,300,3,2
-288,4,300,3,3
+configuration,cup,fullness,filling_amount [ml],grasp_type,handover_location,subject
+1,white cup,empty,0,bottom,left,S1
+2,white cup,empty,0,bottom,right,S1
+3,white cup,empty,0,bottom,center,S1
+4,white cup,empty,0,top,left,S1
+5,white cup,empty,0,top,right,S1
+6,white cup,empty,0,top,center,S1
+7,white cup,empty,0,natural,left,S1
+8,white cup,empty,0,natural,right,S1
+9,white cup,empty,0,natural,center,S1
+10,white cup,filled,125,bottom,left,S1
+11,white cup,filled,125,bottom,right,S1
+12,white cup,filled,125,bottom,center,S1
+13,white cup,filled,125,top,left,S1
+14,white cup,filled,125,top,right,S1
+15,white cup,filled,125,top,center,S1
+16,white cup,filled,125,natural,left,S1
+17,white cup,filled,125,natural,right,S1
+18,white cup,filled,125,natural,center,S1
+19,red cup,empty,0,bottom,left,S1
+20,red cup,empty,0,bottom,right,S1
+21,red cup,empty,0,bottom,center,S1
+22,red cup,empty,0,top,left,S1
+23,red cup,empty,0,top,right,S1
+24,red cup,empty,0,top,center,S1
+25,red cup,empty,0,natural,left,S1
+26,red cup,empty,0,natural,right,S1
+27,red cup,empty,0,natural,center,S1
+28,red cup,filled,400,bottom,left,S1
+29,red cup,filled,400,bottom,right,S1
+30,red cup,filled,400,bottom,center,S1
+31,red cup,filled,400,top,left,S1
+32,red cup,filled,400,top,right,S1
+33,red cup,filled,400,top,center,S1
+34,red cup,filled,400,natural,left,S1
+35,red cup,filled,400,natural,right,S1
+36,red cup,filled,400,natural,center,S1
+37,beer cup,empty,0,bottom,left,S1
+38,beer cup,empty,0,bottom,right,S1
+39,beer cup,empty,0,bottom,center,S1
+40,beer cup,empty,0,top,left,S1
+41,beer cup,empty,0,top,right,S1
+42,beer cup,empty,0,top,center,S1
+43,beer cup,empty,0,natural,left,S1
+44,beer cup,empty,0,natural,right,S1
+45,beer cup,empty,0,natural,center,S1
+46,beer cup,filled,450,bottom,left,S1
+47,beer cup,filled,450,bottom,right,S1
+48,beer cup,filled,450,bottom,center,S1
+49,beer cup,filled,450,top,left,S1
+50,beer cup,filled,450,top,right,S1
+51,beer cup,filled,450,top,center,S1
+52,beer cup,filled,450,natural,left,S1
+53,beer cup,filled,450,natural,right,S1
+54,beer cup,filled,450,natural,center,S1
+55,wine glass,empty,0,bottom,left,S1
+56,wine glass,empty,0,bottom,right,S1
+57,wine glass,empty,0,bottom,center,S1
+58,wine glass,empty,0,top,left,S1
+59,wine glass,empty,0,top,right,S1
+60,wine glass,empty,0,top,center,S1
+61,wine glass,empty,0,natural,left,S1
+62,wine glass,empty,0,natural,right,S1
+63,wine glass,empty,0,natural,center,S1
+64,wine glass,filled,300,bottom,left,S1
+65,wine glass,filled,300,bottom,right,S1
+66,wine glass,filled,300,bottom,center,S1
+67,wine glass,filled,300,top,left,S1
+68,wine glass,filled,300,top,right,S1
+69,wine glass,filled,300,top,center,S1
+70,wine glass,filled,300,natural,left,S1
+71,wine glass,filled,300,natural,right,S1
+72,wine glass,filled,300,natural,center,S1
+73,white cup,empty,0,bottom,left,S2
+74,white cup,empty,0,bottom,right,S2
+75,white cup,empty,0,bottom,center,S2
+76,white cup,empty,0,top,left,S2
+77,white cup,empty,0,top,right,S2
+78,white cup,empty,0,top,center,S2
+79,white cup,empty,0,natural,left,S2
+80,white cup,empty,0,natural,right,S2
+81,white cup,empty,0,natural,center,S2
+82,white cup,filled,125,bottom,left,S2
+83,white cup,filled,125,bottom,right,S2
+84,white cup,filled,125,bottom,center,S2
+85,white cup,filled,125,top,left,S2
+86,white cup,filled,125,top,right,S2
+87,white cup,filled,125,top,center,S2
+88,white cup,filled,125,natural,left,S2
+89,white cup,filled,125,natural,right,S2
+90,white cup,filled,125,natural,center,S2
+91,red cup,empty,0,bottom,left,S2
+92,red cup,empty,0,bottom,right,S2
+93,red cup,empty,0,bottom,center,S2
+94,red cup,empty,0,top,left,S2
+95,red cup,empty,0,top,right,S2
+96,red cup,empty,0,top,center,S2
+97,red cup,empty,0,natural,left,S2
+98,red cup,empty,0,natural,right,S2
+99,red cup,empty,0,natural,center,S2
+100,red cup,filled,400,bottom,left,S2
+101,red cup,filled,400,bottom,right,S2
+102,red cup,filled,400,bottom,center,S2
+103,red cup,filled,400,top,left,S2
+104,red cup,filled,400,top,right,S2
+105,red cup,filled,400,top,center,S2
+106,red cup,filled,400,natural,left,S2
+107,red cup,filled,400,natural,right,S2
+108,red cup,filled,400,natural,center,S2
+109,beer cup,empty,0,bottom,left,S2
+110,beer cup,empty,0,bottom,right,S2
+111,beer cup,empty,0,bottom,center,S2
+112,beer cup,empty,0,top,left,S2
+113,beer cup,empty,0,top,right,S2
+114,beer cup,empty,0,top,center,S2
+115,beer cup,empty,0,natural,left,S2
+116,beer cup,empty,0,natural,right,S2
+117,beer cup,empty,0,natural,center,S2
+118,beer cup,filled,450,bottom,left,S2
+119,beer cup,filled,450,bottom,right,S2
+120,beer cup,filled,450,bottom,center,S2
+121,beer cup,filled,450,top,left,S2
+122,beer cup,filled,450,top,right,S2
+123,beer cup,filled,450,top,center,S2
+124,beer cup,filled,450,natural,left,S2
+125,beer cup,filled,450,natural,right,S2
+126,beer cup,filled,450,natural,center,S2
+127,wine glass,empty,0,bottom,left,S2
+128,wine glass,empty,0,bottom,right,S2
+129,wine glass,empty,0,bottom,center,S2
+130,wine glass,empty,0,top,left,S2
+131,wine glass,empty,0,top,right,S2
+132,wine glass,empty,0,top,center,S2
+133,wine glass,empty,0,natural,left,S2
+134,wine glass,empty,0,natural,right,S2
+135,wine glass,empty,0,natural,center,S2
+136,wine glass,filled,300,bottom,left,S2
+137,wine glass,filled,300,bottom,right,S2
+138,wine glass,filled,300,bottom,center,S2
+139,wine glass,filled,300,top,left,S2
+140,wine glass,filled,300,top,right,S2
+141,wine glass,filled,300,top,center,S2
+142,wine glass,filled,300,natural,left,S2
+143,wine glass,filled,300,natural,right,S2
+144,wine glass,filled,300,natural,center,S2
+145,white cup,empty,0,bottom,left,S3
+146,white cup,empty,0,bottom,right,S3
+147,white cup,empty,0,bottom,center,S3
+148,white cup,empty,0,top,left,S3
+149,white cup,empty,0,top,right,S3
+150,white cup,empty,0,top,center,S3
+151,white cup,empty,0,natural,left,S3
+152,white cup,empty,0,natural,right,S3
+153,white cup,empty,0,natural,center,S3
+154,white cup,filled,125,bottom,left,S3
+155,white cup,filled,125,bottom,right,S3
+156,white cup,filled,125,bottom,center,S3
+157,white cup,filled,125,top,left,S3
+158,white cup,filled,125,top,right,S3
+159,white cup,filled,125,top,center,S3
+160,white cup,filled,125,natural,left,S3
+161,white cup,filled,125,natural,right,S3
+162,white cup,filled,125,natural,center,S3
+163,red cup,empty,0,bottom,left,S3
+164,red cup,empty,0,bottom,right,S3
+165,red cup,empty,0,bottom,center,S3
+166,red cup,empty,0,top,left,S3
+167,red cup,empty,0,top,right,S3
+168,red cup,empty,0,top,center,S3
+169,red cup,empty,0,natural,left,S3
+170,red cup,empty,0,natural,right,S3
+171,red cup,empty,0,natural,center,S3
+172,red cup,filled,400,bottom,left,S3
+173,red cup,filled,400,bottom,right,S3
+174,red cup,filled,400,bottom,center,S3
+175,red cup,filled,400,top,left,S3
+176,red cup,filled,400,top,right,S3
+177,red cup,filled,400,top,center,S3
+178,red cup,filled,400,natural,left,S3
+179,red cup,filled,400,natural,right,S3
+180,red cup,filled,400,natural,center,S3
+181,beer cup,empty,0,bottom,left,S3
+182,beer cup,empty,0,bottom,right,S3
+183,beer cup,empty,0,bottom,center,S3
+184,beer cup,empty,0,top,left,S3
+185,beer cup,empty,0,top,right,S3
+186,beer cup,empty,0,top,center,S3
+187,beer cup,empty,0,natural,left,S3
+188,beer cup,empty,0,natural,right,S3
+189,beer cup,empty,0,natural,center,S3
+190,beer cup,filled,450,bottom,left,S3
+191,beer cup,filled,450,bottom,right,S3
+192,beer cup,filled,450,bottom,center,S3
+193,beer cup,filled,450,top,left,S3
+194,beer cup,filled,450,top,right,S3
+195,beer cup,filled,450,top,center,S3
+196,beer cup,filled,450,natural,left,S3
+197,beer cup,filled,450,natural,right,S3
+198,beer cup,filled,450,natural,center,S3
+199,wine glass,empty,0,bottom,left,S3
+200,wine glass,empty,0,bottom,right,S3
+201,wine glass,empty,0,bottom,center,S3
+202,wine glass,empty,0,top,left,S3
+203,wine glass,empty,0,top,right,S3
+204,wine glass,empty,0,top,center,S3
+205,wine glass,empty,0,natural,left,S3
+206,wine glass,empty,0,natural,right,S3
+207,wine glass,empty,0,natural,center,S3
+208,wine glass,filled,300,bottom,left,S3
+209,wine glass,filled,300,bottom,right,S3
+210,wine glass,filled,300,bottom,center,S3
+211,wine glass,filled,300,top,left,S3
+212,wine glass,filled,300,top,right,S3
+213,wine glass,filled,300,top,center,S3
+214,wine glass,filled,300,natural,left,S3
+215,wine glass,filled,300,natural,right,S3
+216,wine glass,filled,300,natural,center,S3
+217,white cup,empty,0,bottom,left,S4
+218,white cup,empty,0,bottom,right,S4
+219,white cup,empty,0,bottom,center,S4
+220,white cup,empty,0,top,left,S4
+221,white cup,empty,0,top,right,S4
+222,white cup,empty,0,top,center,S4
+223,white cup,empty,0,natural,left,S4
+224,white cup,empty,0,natural,right,S4
+225,white cup,empty,0,natural,center,S4
+226,white cup,filled,125,bottom,left,S4
+227,white cup,filled,125,bottom,right,S4
+228,white cup,filled,125,bottom,center,S4
+229,white cup,filled,125,top,left,S4
+230,white cup,filled,125,top,right,S4
+231,white cup,filled,125,top,center,S4
+232,white cup,filled,125,natural,left,S4
+233,white cup,filled,125,natural,right,S4
+234,white cup,filled,125,natural,center,S4
+235,red cup,empty,0,bottom,left,S4
+236,red cup,empty,0,bottom,right,S4
+237,red cup,empty,0,bottom,center,S4
+238,red cup,empty,0,top,left,S4
+239,red cup,empty,0,top,right,S4
+240,red cup,empty,0,top,center,S4
+241,red cup,empty,0,natural,left,S4
+242,red cup,empty,0,natural,right,S4
+243,red cup,empty,0,natural,center,S4
+244,red cup,filled,400,bottom,left,S4
+245,red cup,filled,400,bottom,right,S4
+246,red cup,filled,400,bottom,center,S4
+247,red cup,filled,400,top,left,S4
+248,red cup,filled,400,top,right,S4
+249,red cup,filled,400,top,center,S4
+250,red cup,filled,400,natural,left,S4
+251,red cup,filled,400,natural,right,S4
+252,red cup,filled,400,natural,center,S4
+253,beer cup,empty,0,bottom,left,S4
+254,beer cup,empty,0,bottom,right,S4
+255,beer cup,empty,0,bottom,center,S4
+256,beer cup,empty,0,top,left,S4
+257,beer cup,empty,0,top,right,S4
+258,beer cup,empty,0,top,center,S4
+259,beer cup,empty,0,natural,left,S4
+260,beer cup,empty,0,natural,right,S4
+261,beer cup,empty,0,natural,center,S4
+262,beer cup,filled,450,bottom,left,S4
+263,beer cup,filled,450,bottom,right,S4
+264,beer cup,filled,450,bottom,center,S4
+265,beer cup,filled,450,top,left,S4
+266,beer cup,filled,450,top,right,S4
+267,beer cup,filled,450,top,center,S4
+268,beer cup,filled,450,natural,left,S4
+269,beer cup,filled,450,natural,right,S4
+270,beer cup,filled,450,natural,center,S4
+271,wine glass,empty,0,bottom,left,S4
+272,wine glass,empty,0,bottom,right,S4
+273,wine glass,empty,0,bottom,center,S4
+274,wine glass,empty,0,top,left,S4
+275,wine glass,empty,0,top,right,S4
+276,wine glass,empty,0,top,center,S4
+277,wine glass,empty,0,natural,left,S4
+278,wine glass,empty,0,natural,right,S4
+279,wine glass,empty,0,natural,center,S4
+280,wine glass,filled,300,bottom,left,S4
+281,wine glass,filled,300,bottom,right,S4
+282,wine glass,filled,300,bottom,center,S4
+283,wine glass,filled,300,top,left,S4
+284,wine glass,filled,300,top,right,S4
+285,wine glass,filled,300,top,center,S4
+286,wine glass,filled,300,natural,left,S4
+287,wine glass,filled,300,natural,right,S4
+288,wine glass,filled,300,natural,center,S4

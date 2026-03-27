@@ -81,35 +81,6 @@ logger.add(sys.stderr, format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
 
 Number = Union[int, float, np.ndarray]
 
-FILLING_DENSITY = {
-       "rice": 0.81,      # grams per mL
-       "pasta": 0.75,     # estimated
-       "water": 1.0,      # grams per mL
-   }
-
-# CORSMAL benchmark thresholds (from paper)
-DELIVERY_LOCATION_THRESHOLD_MM = 50.0      # Distance from target
-DELIVERY_MASS_THRESHOLD_G = 50.0           # Mass tolerance
-
-
-TIMING_PARAMS = {
-    "human_maneuvering": {
-        "plateau_th": 1500,  # ms
-        "tau": 1500,         # ms
-        "epsilon": 0.05
-    },
-    "handover": {
-        "plateau_th": 400,   # ms
-        "tau": 600,          # ms
-        "epsilon": 0.05
-    },
-    "robot_maneuvering": {
-        "plateau_th": 1500,  # ms
-        "tau": 1500,         # ms
-        "epsilon": 0.0
-    }
-}
-
 class CorsmalEvaluationToolkit:
     """
     CORSMAL Evaluation Toolkit core class.
@@ -141,14 +112,24 @@ class CorsmalEvaluationToolkit:
         "time_robot_maneuvering": 1/12         # λ13 (index 12)
     }
 
-    # -------------------------
-    # Unit normalization constants (paper assumes these units)
-    # -------------------------
-    UNIT_NORMALIZATION = {
-        "distance_mm": 1.0,   # already in mm
-        "mass_g": 1.0,        # already in grams
-        "percentage": 1.0,    # already in %
-        "time_s": 1.0         # already in seconds
+    DELIVERY_LOCATION_TH = 500 #mm
+
+    TIMING_PARAMS = {
+        "human_maneuvering": {
+            "plateau_th": 1500,  # ms
+            "tau": 1500,         # ms
+            "epsilon": 0.05
+        },
+        "handover": {
+            "plateau_th": 400,   # ms
+            "tau": 600,          # ms
+            "epsilon": 0.05
+        },
+        "robot_maneuvering": {
+            "plateau_th": 1500,  # ms
+            "tau": 1500,         # ms
+            "epsilon": 0.05
+        }
     }
 
     def __init__(self, n_config_cup: int = 18, n_subjects: int = 4, n_cups: int = 4):
@@ -199,127 +180,119 @@ class CorsmalEvaluationToolkit:
             },
             "benchmark_score": 0.0
         }
-    
-    def add_trial_result(self, metadata: dict, scores: dict):
+
+    # --------------------------------------------------
+    # Scoring Functions (for each single configuration)
+    # --------------------------------------------------
+    def compute_score_type_1(self,
+                            a: Number,
+                            b: Number,
+                            *,
+                            flag: Optional[Union[np.ndarray, list]] = None,
+                            min_value: Optional[float] = None,
+                            max_value: Optional[float] = None,
+                            epsilon_absolute: Optional[float] = None,
+                            atol: float = 1e-10,
+                            return_array: bool = False) -> Union[float, np.ndarray]:
         """
-        Store a single trial's metadata and computed scores.
-        metadata: dict with keys like 'cup', 'grasp_type', 'handover_location', 'fullness'
-        scores: dict with keys 'S_vision', 'S_robot', 'S_task', 'S_benchmark'
+        Robust Sigma_1 (σ₁) with NaN handling for predictions and optional delivered flag.
+
+        If a is NaN for a row, the score for that row remains NaN.
+        If delivered is provided and equals 0 for a row, the score for that row is set to NaN.
+        (Change the final masking to 0.0 if you prefer zeros instead of NaNs.)
         """
-        self.trial_results.append({**metadata, **scores})
+        # Convert to numpy arrays of float
+        a = np.asarray(a, dtype=float)
+        b = np.asarray(b, dtype=float)
 
-    # -------------------------
-    # Utility Functions
-    # -------------------------
-    def check_length_arrays(self, array1: Union[list, np.ndarray], array2: Union[list, np.ndarray]) -> None:
-        """
-        Validate that two arrays/lists have the same length.
+        if a.shape != b.shape:
+            raise ValueError(f"Shape mismatch: {a.shape} vs {b.shape}")
 
-        Args:
-            array1: First array-like object.
-            array2: Second array-like object.
+        # Validate bounds if requested (ignore NaNs in validation)
+        if min_value is not None:
+            if np.any(np.logical_and(~np.isnan(a), a < min_value)) or np.any(np.logical_and(~np.isnan(b), b < min_value)):
+                raise ValueError(f"Values below minimum {min_value}")
+        if max_value is not None:
+            if np.any(np.logical_and(~np.isnan(a), a > max_value)) or np.any(np.logical_and(~np.isnan(b), b > max_value)):
+                raise ValueError(f"Values exceed maximum {max_value}")
 
-        Raises:
-            ValueError: If lengths do not match.
-        """
-        if len(array1) != len(array2):
-            raise ValueError(
-                f"Length mismatch: predictions ({len(array1)}) != annotations ({len(array2)})"
-            )
-    
-    def check_length_preds_gts(self, preds: Iterable, gts: Iterable) -> None:
-        """Alias for check_length_arrays with clearer naming."""
-        self.check_length_arrays(preds, gts)
-        
-    def get_measure_annotations(
-        self, 
-        df_annotations: pd.DataFrame,
-        measure: str,
-        n_config_cup: int,
-        n_subjects: int
-    ) -> np.ndarray:
-        """
-        Return all the annotations for a given measure as a NumPy array.
+        # Normalize shapes for scalar handling
+        is_scalar = (a.ndim == 0)
+        a = np.atleast_1d(a)
+        b = np.atleast_1d(b)
 
-        Args:
-            df_annotations: DataFrame with all the annotations.
-            measure: One of ['width_at_the_top', 'width_at_the_bottom', 'height', 'volume'].
-            n_config_cup: Number of configurations for each cup (default: 18).
-            n_subjects: Number of subjects (default: 4).
-
-        Returns:
-            np.ndarray: Flattened array of annotations.
-        """
-        valid_measures = ['width_at_the_top', 'width_at_the_bottom', 'height', 'volume']
-        if measure not in valid_measures:
-            raise ValueError(f"Invalid measure '{measure}'. Must be one of {valid_measures}.")
-
-        if measure == 'volume':
-            if not {"cup", "filling (ml)"}.issubset(df_annotations.columns):
-                raise KeyError("Missing required columns for volume calculation.")
-
-            cups = df_annotations["cup"].to_numpy()
-            fillings = df_annotations["filling (ml)"].to_numpy()
-
-            measure_annotations = []
-            for j in range(len(cups)):
-                current_filling = fillings[j]
-                current_cup_str = f"cup{cups[j]}"
-                if current_cup_str not in df_annotations[measure]:
-                    raise KeyError(f"Missing volume data for {current_cup_str}.")
-                current_volume = df_annotations[measure][current_cup_str]
-                gt_fullness = (current_filling / current_volume) * 100
-                measure_annotations.append(gt_fullness)
-
-            return np.array(measure_annotations, dtype=float)
-
+        # Prepare delivered mask if provided
+        if flag is not None:
+            flag_arr = np.asarray(flag)
+            if flag_arr.shape != a.shape:
+                raise ValueError(f"Delivered flag shape mismatch: {flag_arr.shape} vs {a.shape}")
+            # treat nonzero as delivered
+            delivered_mask = (flag_arr != 0)
         else:
-            try:
-                cup_arrays = [
-                    np.repeat(df_annotations[measure][f"cup{i}"], n_config_cup)
-                    for i in range(1, 5)
-                ]
-            except KeyError as e:
-                raise KeyError(f"Missing expected column in annotations: {e}")
+            delivered_mask = np.ones_like(a, dtype=bool)
 
-            cups_all = np.concatenate(cup_arrays)
-            return np.tile(cups_all, n_subjects).astype(float)
+        # Start with NaNs where a is NaN or delivered is False
+        score = np.full_like(a, np.nan, dtype=float)
+        valid_mask = (~np.isnan(a)) & (~np.isnan(b)) & delivered_mask
 
-    # -------------------------
-    # Sigma Functions
-    # -------------------------
-    def compute_score_type_1(self, 
-                        a: Number, 
-                        b: Number,
-                        *,
-                        min_value: Optional[float] = None,
-                        max_value: Optional[float] = None,
-                        epsilon_absolute: Optional[float] = None,
-                        atol: float = 1e-10,
-                        return_array: bool = False) -> Union[float, np.ndarray]:
+        if not np.any(valid_mask):
+            # Nothing valid: return NaNs (or scalar)
+            if return_array or not is_scalar:
+                return score
+            else:
+                return float(score.flat[0])
+
+        # Compute on valid entries only
+        diff = np.abs(a[valid_mask] - b[valid_mask])
+        b_abs = np.abs(b[valid_mask])
+
+        # Initialize valid scores to ones
+        s = np.ones_like(diff, dtype=float)
+
+        # Case 1: both zero (use atol)
+        mask_zero = np.isclose(a[valid_mask], 0, atol=atol) & np.isclose(b[valid_mask], 0, atol=atol)
+        s[mask_zero] = 1.0
+
+        # Case 2: small ground truth using epsilon_absolute if provided
+        if epsilon_absolute is not None:
+            mask_small = ~mask_zero & (b_abs < epsilon_absolute)
+            if np.any(mask_small):
+                s[mask_small] = np.clip(1.0 - diff[mask_small] / epsilon_absolute, 0.0, 1.0)
+            mask_normal = ~mask_zero & ~mask_small
+        else:
+            # large error case: |a-b| >= |b| -> score 0
+            mask_large = ~mask_zero & (diff >= b_abs)
+            if np.any(mask_large):
+                s[mask_large] = 0.0
+            mask_normal = ~mask_zero & ~mask_large
+
+        # Case 3: normal relative error
+        if np.any(mask_normal):
+            with np.errstate(divide='ignore', invalid='ignore'):
+                rel_error = diff[mask_normal] / b_abs[mask_normal]
+                s[mask_normal] = np.clip(1.0 - rel_error, 0.0, 1.0)
+
+        # Place computed scores back into full array
+        score[valid_mask] = s
+
+        # Optional: convert any remaining infinities or invalids to 0 (you already did this)
+        # score = np.where(np.isfinite(score), score, 0.0)
+        score = np.nan_to_num(score, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # Return type handling
+        if return_array or not is_scalar:
+            return score
+        else:
+            return float(score.flat[0])
+
+
+    def compute_score_fullness(self,
+                               a: Number, 
+                               b: Number,
+                               *,
+                               atol: float = 1e-10,
+                               return_array: bool = False) -> Union[float, np.ndarray]:
         """
-        Sigma_1 (σ₁): Relative difference scoring.
-
-        Used for: s1-s5 (width_top, width_bottom, height, mass_vision, fullness)
-    
-        Formula:
-            σ₁(a, b) = {
-                1.0,              if a=0 ∧ b=0  (perfect match) [only for fullness]
-                0.0,              if |a-b| ≥ |b|  (100%+ error)
-                1 - |a-b|/|b|,    otherwise (relative error)
-            }
-        
-        Args:
-            a: Predicted value(s)
-            b: Ground truth value(s)
-            min_value: Validate all values >= min_value
-            max_value: Validate all values <= max_value
-            epsilon_absolute: If provided, use absolute tolerance for |b| < epsilon_absolute
-            atol: Absolute tolerance for zero comparisons
-            return_array: If True, always return array; else return float for scalar input
-        
-        Returns:
-            Score in [0, 1]
         """
         # Convert and validate
         a = np.asarray(a, dtype=float)
@@ -327,13 +300,7 @@ class CorsmalEvaluationToolkit:
         
         if a.shape != b.shape:
             raise ValueError(f"Shape mismatch: {a.shape} vs {b.shape}")
-        
-        if min_value is not None and (np.any(a < min_value) or np.any(b < min_value)):
-            raise ValueError(f"Values below minimum {min_value}")
-        
-        if max_value is not None and (np.any(a > max_value) or np.any(b > max_value)):
-            raise ValueError(f"Values exceed maximum {max_value}")
-        
+
         is_scalar = (a.ndim == 0)
         a = np.atleast_1d(a)
         b = np.atleast_1d(b)
@@ -341,37 +308,21 @@ class CorsmalEvaluationToolkit:
         # Compute scores
         score = np.ones_like(a, dtype=float)
         diff = np.abs(a - b)
-        b_abs = np.abs(b)
-        
+
+        score = np.clip(1.0 - diff/100, 0, 1)
+
         # Case 1: Both zero
         mask_zero = np.isclose(a, 0, atol=atol) & np.isclose(b, 0, atol=atol)
         score[mask_zero] = 1.0
-        
-        # Case 2: Small ground truth (use absolute tolerance if provided)
-        if epsilon_absolute is not None:
-            mask_small = ~mask_zero & (b_abs < epsilon_absolute)
-            score[mask_small] = np.clip(1.0 - diff[mask_small] / epsilon_absolute, 0, 1)
-            mask_normal = ~mask_zero & ~mask_small
-        else:
-            # Original: large error case
-            mask_large = ~mask_zero & (diff >= b_abs)
-            score[mask_large] = 0.0
-            mask_normal = ~mask_zero & ~mask_large
-        
-        # Case 3: Normal relative error
-        with np.errstate(divide='ignore', invalid='ignore'):
-            if np.any(mask_normal):
-                rel_error = diff[mask_normal] / b_abs[mask_normal]
-                score[mask_normal] = np.clip(1.0 - rel_error, 0, 1)
-        
-        score = np.nan_to_num(score, nan=0.0, posinf=0.0, neginf=0.0)
-        
+
         # Return type
         if return_array or not is_scalar:
             return score
         else:
             return float(score.flat[0])
 
+
+    
     def compute_score_type_2(self, a: Number, eta: float,
                         return_array: bool = False) -> Union[float, np.ndarray]:
         """
@@ -420,7 +371,6 @@ class CorsmalEvaluationToolkit:
             return score
         else:
             return float(score.flat[0])
-
 
     def compute_score_type_2_plateau(self,
                                     a: Number,
@@ -501,8 +451,6 @@ class CorsmalEvaluationToolkit:
         else:
             return float(score[0])
 
-        
-
     def compute_score_type_3(self, P: np.ndarray, P_hat: np.ndarray, epsilon: float) -> float:
         """
         Sigma score type 3: spatial/pose-based scoring.
@@ -551,169 +499,294 @@ class CorsmalEvaluationToolkit:
         pos_score = max(0.0, 1 - (pos_error / epsilon_pos_mm))
         rot_score = max(0.0, 1 - (rot_error_deg / epsilon_rot_deg))
         return (pos_score + rot_score) / 2.0
-
+    
     # -------------------------
     # Metric Computations
-    # -------------------------
+    # -------------------------  
 
-    def compute_width_top(self, preds: Iterable[float], gts: Iterable[float]) -> float:
-        self.check_length_preds_gts(preds, gts)
-        return self.compute_score_type_1(np.array(preds), np.array(gts))
-
-    def compute_width_bottom(self, preds: Iterable[float], gts: Iterable[float]) -> float:
-        self.check_length_preds_gts(preds, gts)
-        return self.compute_score_type_1(np.array(preds), np.array(gts))
-
-    def compute_height(self, preds: Iterable[float], gts: Iterable[float]) -> float:
-        self.check_length_preds_gts(preds, gts)
-        return self.compute_score_type_1(np.array(preds), np.array(gts))
-
-    def compute_mass_vision(self, preds: Iterable[float], gts: Optional[Iterable[float]]) -> float:
-        if gts is not None:
-            self.check_length_preds_gts(preds, gts)
-            return self.compute_score_type_1(np.array(preds), np.array(gts))
-        return 0.0  # No GT available
-
-    def compute_fullness(self, preds: Iterable[float], gts: Iterable[float]) -> float:
-        self.check_length_preds_gts(preds, gts)
-        return self.compute_score_type_1(np.array(preds), np.array(gts))
-
-    def compute_mass_robot(self, preds: Iterable[float], gts: Iterable[float]) -> float:
-        """s6: Compute score for robot mass estimation."""
-        preds = list(preds)
-        gts = list(gts)
-        
-        # Check empty FIRST before checking length
-        if not preds:
-            raise ValueError("Empty predictions list for mass_robot computation.")
-        if not gts:
-            raise ValueError("Empty ground truth list for mass_robot computation.")
-        
-        # Then check lengths match
-        self.check_length_preds_gts(preds, gts)
-        scores = [self.compute_score_type_1(p, g) for p, g in zip(preds, gts)]
-        return float(np.mean(scores))
-
-    def compute_human_hand_pose_prediction(self, preds, gts, epsilon: float) -> float:
-        return self.compute_score_type_3(preds, gts, epsilon)
-
-    def compute_end_effector(self, preds, gts, epsilon: float) -> float:
-        return self.compute_score_type_3(preds, gts, epsilon)
-    
-    # -------------------------
-    # Task Metric Computations
-    # -------------------------
-    def compute_task_metric_avg_sigma2(self, preds, thr: float) -> float:
+    def compute_vision_scores(self, 
+                              df_pred: Number, 
+                              df_gts: Number
+                              ) -> None:
         """
-        Compute the average sigma_2 score for a list of predictions.
+        """
+        logger.info("Step 1: Computing vision scores..")
+
+        logger.info("    Score 1 - Width at the top ..")
+        # s1: width at the top in mm
+        self.scores["vision"]["width_top"] = float(self.compute_score_type_1(
+            df_pred["width_top_est_mm_vision"],
+            df_gts["width_top"]
+            # self.get_measure_annotations(df_gts, "width_at_the_top", self.n_config_cup, self.n_subjects)
+        ).mean())
+
+        # s2: width at the bottom in mm
+        logger.info("    Score 2 - Width at the bottom ..")
+        self.scores["vision"]["width_bottom"] = float(self.compute_score_type_1(
+            df_pred["width_bottom_est_mm_vision"],
+            df_gts["width_bottom"]
+            # self.get_measure_annotations(df_gts, "width_at_the_bottom", self.n_config_cup, self.n_subjects)
+        ).mean())
+
+        # s3: height in mm
+        logger.info("    Score 3 - Height ..")
+        self.scores["vision"]["height"] = float(self.compute_score_type_1(
+            df_pred["height_est_mm_vision"],
+            df_gts["height"]
+            # self.get_measure_annotations(df_gts, "height", self.n_config_cup, self.n_subjects)
+        ).mean())
+
+        # s4: mass (empty cup + filling) in g
+        logger.info("    Score 4 - Mass (cup + filling) ..")
+        self.scores["vision"]["mass"] = float(self.compute_score_type_1(
+            df_pred["mass_full_est_g_vision"], 
+            df_pred["initial_mass_measured_g"], 
+            # None
+        ).mean())
+
+        # s5: fullness in %
+        logger.info("    Score 5 - Fullness ..")
+        self.scores["vision"]["fullness"] = float(self.compute_score_fullness(
+            df_pred["fill_level_est_percent_vision"],
+            df_gts["fullness"]
+            # self.get_measure_annotations(df_gts, "volume", self.n_config_cup, self.n_subjects)
+        ).mean())
+
+        v = self.scores["vision"]
+
+        logger.info("     Vision score ..")
+        self.scores["group_scores"]["vision_score"] = (
+            self.DEFAULT_LAMBDAS["width_top"] * v["width_top"] 
+            + self.DEFAULT_LAMBDAS["width_bottom"] * v["width_bottom"] 
+            + self.DEFAULT_LAMBDAS["height"] * v["height"] 
+            + self.DEFAULT_LAMBDAS["mass_vision"] * v["mass"]
+            + self.DEFAULT_LAMBDAS["fullness"] * v["fullness"]
+        )
+
+    def compute_robot_scores(self,
+                            df_pred: Number
+                            ) -> None:
+        """
+        """
+        logger.info("Step 2: Computing robot scores ..")
+
+        logger.info("    Score 6 - Mass (cup + filling) ..")
+        r = self.scores["robot"]
+        r["mass_robot"] = self.compute_score_type_1(
+                df_pred["robot_mass_est_g"], 
+                df_pred["initial_mass_measured_g"], 
+                flag=df_pred["robot_mass_est_available"]
+            ).mean()
+
+        # TODO
+        logger.info("    Score 7 - Human-trajectory ..")
+        r["hand_pose"] = 0.0
+        
+        # TODO
+        logger.info("    Score 8 - End-effector reachability ..")
+        r["end_effector"] = 0.0
+        # self.compute_score_type_3(preds, gts, epsilon)
+
+        # --- weighted task score ---
+        logger.info("     Robot score ..")
+        lambdas = self.DEFAULT_LAMBDAS
+        # Use .get with default 0 to avoid KeyError if a lambda is missing
+        robot_score = (
+            lambdas.get("mass_robot", 0.0) * r.get("mass_robot", np.nan)
+            + lambdas.get("hand_pose", 0.0) * r.get("hand_pose", np.nan)
+            + lambdas.get("end_effector", 0.0) * r.get("end_effector", np.nan)
+        )
+
+        # Store results
+        self.scores.setdefault("group_scores", {})["robot_score"] = float(robot_score)
+
+    def compute_task_scores(self,
+                            df_pred: pd.DataFrame,
+                            target_loc: Number) -> None:
+                            # df_pred: Number, 
+                            # df_gts: Number,
+                            # target_loc: np.array,
+                            # ) -> None:
+        """
+        Compute task-level scores and store them in self.scores.
+
+        Mutates:
+            self.scores["task"] and self.scores["group_scores"]["task_score"]
 
         Args:
-            preds: Iterable of prediction values.
-            thr: Threshold for sigma_2 scoring.
+            df_pred: predictions DataFrame (must contain required columns).
+            target_loc: iterable of 3 floats [x, y, z].
+        """
+        logger.info("Step 3: Computing task scores ..")
+
+        # Validate inputs
+        if not isinstance(df_pred, pd.DataFrame):
+            raise TypeError("df_pred must be a pandas DataFrame")
+        if len(target_loc) != 3:
+            raise ValueError("target_loc must be length 3 (x, y, z)")
+
+        t = self.scores.setdefault("task", {})
+        # t = self.scores["task"]
+
+        # s9: delivery location score
+        logger.info("    Score 9 - Delivery location ..")
+
+        est_locs = df_pred[
+            ["delivery_location_est_x_mm", "delivery_location_est_y_mm", "delivery_location_est_z_mm"]
+        ].to_numpy(dtype=float)
+
+        targ_loc = np.asarray(target_loc, dtype=float).reshape(1, 3)
+
+        # Euclidean distance; NaNs propagate naturally
+        euc_dist_delivery = np.linalg.norm(est_locs - targ_loc, axis=1)
+
+        # Apply undelivery flag: keep distances only where undelivered == 1
+        undelivered_mask = df_pred["final_mass_null_flag"].to_numpy() == 1
+        euc_dist_delivery = np.where(undelivered_mask, np.nan, euc_dist_delivery)
+
+        # compute_score_type_2 expected to return array-like per-row scores
+        delivery_scores = self.compute_score_type_2(euc_dist_delivery, self.DELIVERY_LOCATION_TH)
+        t["delivery_location"] = float(np.nanmean(delivery_scores)) if len(delivery_scores) > 0 else float(0)
+
+        # --- mass score ---
+        logger.info("    Score 10 - Final mass ..")
+        mass_scores = self.compute_score_type_1(
+            df_pred["final_mass_measured_g"].to_numpy(dtype=float),
+            df_pred["initial_mass_measured_g"].to_numpy(dtype=float),
+            flag=~df_pred["final_mass_null_flag"].to_numpy()
+        )
+        t["delivery_mass_filling"] = float(np.nanmean(mass_scores)) if len(mass_scores) > 0 else float(0)
+
+        # --- timing scores (differences) ---
+        # Use explicit to_numpy and dtype=float to avoid pandas subtraction surprises
+        t_robot_first = df_pred["t_robot_first_contact_ms"].to_numpy(dtype=float)
+        t_human_first = df_pred["t_human_first_contact_ms"].to_numpy(dtype=float)
+        t_human_last = df_pred["t_human_last_contact_ms"].to_numpy(dtype=float)
+        t_robot_last = df_pred["t_robot_last_contact_ms"].to_numpy(dtype=float)
+
+        human_maneuvering_dur = t_robot_first - t_human_first
+        handover_dur = t_human_last - t_robot_first
+        robot_maneuvering_dur = t_robot_last - t_human_last
+
+        logger.info("    Score 11 - Human maneuvring time ..")
+        t["time_human_maneuvering"] = float(
+            np.nanmean(self.compute_score_type_2_plateau(
+                human_maneuvering_dur, 
+                self.TIMING_PARAMS["human_maneuvering"]["tau"],
+                plateau_th=self.TIMING_PARAMS["human_maneuvering"]["plateau_th"],
+                epsilon=self.TIMING_PARAMS["human_maneuvering"]["epsilon"]
+            ))
+        )
+        logger.info("    Score 12 - Handover time ..")
+        t["time_handover"] = float(
+            np.nanmean(self.compute_score_type_2_plateau(
+                handover_dur, 
+                self.TIMING_PARAMS["handover"]["tau"],
+                plateau_th=self.TIMING_PARAMS["handover"]["plateau_th"],
+                epsilon=self.TIMING_PARAMS["handover"]["epsilon"]
+            ))
+        )
+        logger.info("    Score 13 - Robot maneuvering time ..")
+        t["time_robot_maneuvering"] = float(
+            np.nanmean(self.compute_score_type_2_plateau(
+                robot_maneuvering_dur, 
+                self.TIMING_PARAMS["robot_maneuvering"]["tau"],
+                plateau_th=self.TIMING_PARAMS["robot_maneuvering"]["plateau_th"],
+                epsilon=self.TIMING_PARAMS["robot_maneuvering"]["epsilon"]
+            ))
+        )
+
+        # --- weighted task score ---
+        logger.info("     Task score ..")
+        lambdas = self.DEFAULT_LAMBDAS
+        # Use .get with default 0 to avoid KeyError if a lambda is missing
+        task_score = (
+            lambdas.get("delivery_location", 0.0) * t.get("delivery_location", np.nan)
+            + lambdas.get("delivery_mass_filling", 0.0) * t.get("delivery_mass_filling", np.nan)
+            + lambdas.get("time_human_maneuvering", 0.0) * t.get("time_human_maneuvering", np.nan)
+            + lambdas.get("time_handover", 0.0) * t.get("time_handover", np.nan)
+            + lambdas.get("time_robot_maneuvering", 0.0) * t.get("time_robot_maneuvering", np.nan)
+        )
+
+        # Store results
+        self.scores.setdefault("group_scores", {})["task_score"] = float(task_score)
+    
+    def compute_benchmark_score(self, weights: dict | None = None) -> float:
+        """
+        Compute and store the benchmark score as a weighted average of group scores.
+
+        Args:
+            weights: optional mapping of group name to weight. Defaults to equal weights
+                    for 'vision_score', 'robot_score', 'task_score'.
 
         Returns:
-            float: Average sigma_2 score.
+            The computed benchmark score (float). Also stored in self.scores["benchmark_score"].
+
+        Raises:
+            KeyError if required group scores are missing.
+            ValueError if weights are invalid (non-positive total).
         """
-        preds = list(preds)
-        if not preds:
-            raise ValueError("Empty predictions list for task metric.")
-        # return float(np.mean([self.compute_score_type_2(p, thr) for p in preds]))
-        return float(np.mean([self.compute_score_type_2_plateau(p, thr) for p in preds]))
-    
-    def compute_delivery_location(self, preds_mm: Iterable[float], thr_mm: float) -> float:
-        """s9: Delivery location error in mm."""
-        preds_mm = [p / self.UNIT_NORMALIZATION["distance_mm"] for p in preds_mm]
-        score = self.compute_task_metric_avg_sigma2(preds_mm, thr_mm)
-        self.scores["task"]["delivery_location"] = score
-        return score
+        logger.info("Step 4: Computing benchmark score ..")
 
-    def compute_delivery_mass_filling(self, preds_g: Iterable[float], thr_g: float) -> float:
-        """s11: Delivery mass filling error in grams."""
-        preds_g = [p / self.UNIT_NORMALIZATION["mass_g"] for p in preds_g]
-        score = self.compute_task_metric_avg_sigma2(preds_g, thr_g)
-        self.scores["task"]["delivery_mass_filling"] = score
-        return score
+        import math
 
-    def compute_time_human_maneuvering(self, preds_s: Iterable[float], thr_s: float) -> float:
-        """s12: Time human maneuvering in seconds."""
-        preds_s = [p / self.UNIT_NORMALIZATION["time_s"] for p in preds_s]
-        score = self.compute_task_metric_avg_sigma2(preds_s, thr_s)
-        self.scores["task"]["time_human_maneuvering"] = score
-        return score
-
-    def compute_time_handover(self, preds_s: Iterable[float], thr_s: float) -> float:
-        """s13: Time handover in seconds."""
-        preds_s = [p / self.UNIT_NORMALIZATION["time_s"] for p in preds_s]
-        score = self.compute_task_metric_avg_sigma2(preds_s, thr_s)
-        self.scores["task"]["time_handover"] = score
-        return score
-
-    def compute_time_robot_maneuvering(self, preds_s: Iterable[float], thr_s: float) -> float:
-        """s14: Time robot maneuvering in seconds."""
-        preds_s = [p / self.UNIT_NORMALIZATION["time_s"] for p in preds_s]
-        score = self.compute_task_metric_avg_sigma2(preds_s, thr_s)
-        self.scores["task"]["time_robot_maneuvering"] = score
-        return score
-    
-    # -------------------------
-    # Group Score Computations
-    # -------------------------
-    def compute_vision_score(self) -> float:
-        """
-        Compute vision score as weighted combination of geometric and fullness metrics.
+        required = ["vision_score", "robot_score", "task_score"]
+        g = self.scores.get("group_scores")
+        if not isinstance(g, dict):
+            raise KeyError("self.scores['group_scores'] must be a dict and present")
         
-        Paper: Sanchez-Matilla et al., RA-L 2020
-        Weights: Geometric (width_top, width_bottom, height) each 1/9
-                Physical properties (mass, fullness) each 1/3
-        Formula: S_vision = (1/9)(s1 + s2 + s3) + (1/3)(s4 + s5)
-        """
-        v = self.scores["vision"]
-        geometric_score = (v["width_top"] + v["width_bottom"] + v["height"]) / 9
-        physical_score = (v["mass"] + v["fullness"]) / 3
-        vision_score = geometric_score + physical_score
-        self.scores["group_scores"]["vision_score"] = vision_score
-        return vision_score
+        # Ensure required keys exist
+        missing = [k for k in required if k not in g]
+        if missing:
+            raise KeyError(f"Missing group_scores keys: {missing}")
 
-    def compute_robot_score(self) -> float:
-        r = self.scores["robot"]
-        score = (r["mass_robot"] + r["hand_pose"] + r["end_effector"]) / 3
-        self.scores["group_scores"]["robot_score"] = score
-        return score
+        # Default equal weights
+        if weights is None:
+            weights = {k: 1.0 for k in required}
+        else:
+            # keep only relevant weights and fill defaults
+            weights = {k: float(weights.get(k, 0.0)) for k in required}
 
-    def compute_task_score(self, lambdas: Optional[Union[dict, list]] = None) -> float:
-        """Compute task score from 5 task metrics only."""
-        t = self.scores["task"]
-        
-        if lambdas is None:
-            lambdas = {"delivery_location": 0.2, "delivery_mass_filling": 0.2,
-                    "time_human_maneuvering": 0.2, "time_handover": 0.2,
-                    "time_robot_maneuvering": 0.2}
-        
-        if isinstance(lambdas, list):
-            if len(lambdas) != 5:
-                raise ValueError("List lambdas must have exactly 5 elements")
-            lambdas = {"delivery_location": lambdas[0], "delivery_mass_filling": lambdas[1],
-                    "time_human_maneuvering": lambdas[2], "time_handover": lambdas[3],
-                    "time_robot_maneuvering": lambdas[4]}
-        
-        for key in lambdas:
-            if key not in t:
-                raise ValueError(f"Invalid lambda key: {key}")
-        
-        score = sum(lambdas[k] * t[k] for k in lambdas)
-        self.scores["group_scores"]["task_score"] = float(score)
-        return float(score)
+        total_weight = sum(weights.values())
+        if total_weight <= 0 or math.isclose(total_weight, 0.0):
+            raise ValueError("Sum of weights must be positive")
 
-    def compute_benchmark_score(self) -> float:
-        g = self.scores["group_scores"]
-        score = (g["vision_score"] + g["robot_score"] + g["task_score"]) / 3
-        self.scores["benchmark_score"] = score
-        return score
+        # Collect scores and handle NaNs by ignoring them in numerator and denominator
+        scores = []
+        wts = []
+        for k in required:
+            val = g[k]
+            try:
+                val = float(val)
+            except Exception:
+                val = float("nan")
+            if not np.isnan(val):
+                scores.append(val)
+                wts.append(weights[k])
+            else:
+                # If you prefer to treat NaN as zero, replace the above with:
+                # scores.append(0.0); wts.append(weights[k])
+                pass
+
+        if not scores:
+            benchmark = float(0)
+        else:
+            # weighted average
+            weighted_sum = sum(s * w for s, w in zip(scores, wts))
+            weight_sum = sum(wts)
+            benchmark = float(weighted_sum / weight_sum)
+
+        self.scores["benchmark_score"] = benchmark
+        return benchmark
 
     # -------------------------
     # Evaluation Orchestration
     # -------------------------
-    def run_benchmark_evaluation(self, df_pred, df_gts) -> None:
+    def run_benchmark_evaluation(self, 
+                                 df_pred: pd.DataFrame, 
+                                 df_gts: pd.DataFrame,
+                                 target_loc: Number
+                                 ) -> None:
         """
         Run the benchmark evaluation by comparing predictions against ground truth.
         Stores results in self.scores.
@@ -745,107 +818,21 @@ class CorsmalEvaluationToolkit:
 
         try:
             # Vision metrics
-            self.scores["vision"]["width_top"] = self.compute_width_top(
-                df_pred["width_top_est_mm_vision"],
-                df_gts["width_top"]
-                # self.get_measure_annotations(df_gts, "width_at_the_top", self.n_config_cup, self.n_subjects)
-            )
-
-            self.scores["vision"]["width_bottom"] = self.compute_width_bottom(
-                df_pred["width_bottom_est_mm_vision"],
-                df_gts["width_bottom"]
-                # self.get_measure_annotations(df_gts, "width_at_the_bottom", self.n_config_cup, self.n_subjects)
-            )
-
-            self.scores["vision"]["height"] = self.compute_height(
-                df_pred["height_est_mm_vision"],
-                df_gts["height"]
-                # self.get_measure_annotations(df_gts, "height", self.n_config_cup, self.n_subjects)
-            )
-
-            self.scores["vision"]["mass"] = self.compute_mass_vision(
-                df_pred["mass_full_est_g_vision"], 
-                df_pred["initial_mass_measured_g"], 
-                # None
-            )
-
-            self.scores["vision"]["fullness"] = self.compute_fullness(
-                df_pred["fill_level_est_percent_vision"],
-                df_gts["fullness"]
-                # self.get_measure_annotations(df_gts, "volume", self.n_config_cup, self.n_subjects)
-            )
+            self.compute_vision_scores(df_pred, df_gts)
 
             # Robot metrics
-            self.scores["robot"]["mass"] = self.compute_mass_vision(
-                df_pred["robot_mass_est_g"], 
-                df_pred["initial_mass_measured_g"], 
-                # None
-            )
+            self.compute_robot_scores(df_pred)
 
             # Task metrics
-            self.scores["task"]["mass"] = self.compute_mass_vision(
-                df_pred["final_mass_measured_g"], 
-                df_pred["initial_mass_measured_g"], 
-                # None
-            )
+            self.compute_task_scores(df_pred, target_loc)
 
-            self.scores["task"]["time_human_maneuvering"] = self.compute_time_human_maneuvering(
-                df_pred["t_robot_first_contact_ms"].to_numpy() - df_pred["t_human_first_contact_ms"].to_numpy(),
-                TIMING_PARAMS["human_maneuvering"]["tau"]
-            )
-
-            self.scores["task"]["time_handover"] = self.compute_time_handover(
-                df_pred["t_human_last_contact_ms"].to_numpy() - df_pred["t_robot_first_contact_ms"].to_numpy(),
-                TIMING_PARAMS["handover"]["tau"]
-            )
-
-            self.scores["task"]["time_robot_maneuvering"] = self.compute_time_robot_maneuvering(
-                df_pred["t_robot_last_contact_ms"].to_numpy() - df_pred["t_human_last_contact_ms"].to_numpy(),
-                TIMING_PARAMS["robot_maneuvering"]["tau"]
-            )
-
+            self.compute_benchmark_score()
+            
         except Exception as e:
             raise RuntimeError(f"Error during benchmark evaluation: {e}")
         
-    def compute_aggregated_scores(self):
-        """
-        Compute aggregated mean and std per category (cup, grasp, location, fullness)
-        Returns a dict of DataFrames.
-        """
-        if not self.trial_results:
-            raise ValueError("No trial results to aggregate.")
 
-        df = pd.DataFrame(self.trial_results)
-
-        # Overall mean and std
-        overall_mean = df[["S_vision", "S_robot", "S_task", "S_benchmark"]].mean()
-        overall_std = df[["S_vision", "S_robot", "S_task", "S_benchmark"]].std()
-
-        # Grouped means and stds
-        per_cup_mean = df.groupby("cup")[["S_vision", "S_robot", "S_task", "S_benchmark"]].mean()
-        per_cup_std = df.groupby("cup")[["S_vision", "S_robot", "S_task", "S_benchmark"]].std()
-
-        per_grasp_mean = df.groupby("grasp_type")[["S_vision", "S_robot", "S_task", "S_benchmark"]].mean()
-        per_grasp_std = df.groupby("grasp_type")[["S_vision", "S_robot", "S_task", "S_benchmark"]].std()
-
-        per_location_mean = df.groupby("handover_location")[["S_vision", "S_robot", "S_task", "S_benchmark"]].mean()
-        per_location_std = df.groupby("handover_location")[["S_vision", "S_robot", "S_task", "S_benchmark"]].std()
-
-        per_fullness_mean = df.groupby("fullness")[["S_vision", "S_robot", "S_task", "S_benchmark"]].mean()
-        per_fullness_std = df.groupby("fullness")[["S_vision", "S_robot", "S_task", "S_benchmark"]].std()
-
-        return {
-            "overall_mean": overall_mean,
-            "overall_std": overall_std,
-            "per_cup_mean": per_cup_mean,
-            "per_cup_std": per_cup_std,
-            "per_grasp_mean": per_grasp_mean,
-            "per_grasp_std": per_grasp_std,
-            "per_location_mean": per_location_mean,
-            "per_location_std": per_location_std,
-            "per_fullness_mean": per_fullness_mean,
-            "per_fullness_std": per_fullness_std
-        }
+        print(self.scores)
 
     # -------------------------
     # Getters

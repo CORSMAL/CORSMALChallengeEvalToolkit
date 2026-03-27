@@ -19,7 +19,10 @@ import json
 import argparse
 from pathlib import Path
  
+import numpy as np
 import pandas as pd
+from typing import Dict, List, Any, Tuple
+
 from loguru import logger
 
 # Configure logger
@@ -84,9 +87,21 @@ def validate_prediction_csv(csv_path: str) -> pd.DataFrame:
         logger.debug(f"Shape: {df.shape}, Columns: {list(df.columns)}")
         
         # Required columns based on benchmark_evaluator.py
+        # required_columns = [
+        #     "w^i (mm)", "w^i_b (mm)", "h^i (mm)",
+        #     "m^i_v (grams)", "f^i (%)"
+        # ]
         required_columns = [
-            "w^i (mm)", "w^i_b (mm)", "h^i (mm)",
-            "m^i_v (grams)", "f^i (%)"
+            "config_id", "robot_initial_pose_x", "robot_initial_pose_y", "robot_initial_pose_z", 
+            "robot_initial_pose_q1", "robot_initial_pose_q2", "robot_initial_pose_q3", 
+            "robot_initial_pose_q4", "initial_mass_measured_g", "width_top_est_mm_vision", 
+            "width_bottom_est_mm_vision", "height_est_mm_vision", "geometry_est_timepoint",
+            "mass_full_est_g_vision", "mass_full_est_vision_timepoint", "fill_level_est_percent_vision",
+            "fill_level_vision_timepoint", "spill_observed_during_human_maneuvering", 
+            "robot_mass_est_available", "robot_mass_est_g", "robot_mass_est_timepoint", 
+            "delivery_location_est_x_mm", "delivery_location_est_y_mm", "delivery_location_est_z_mm",
+            "final_mass_null_flag", "final_mass_measured_g", "t_human_first_contact_ms", 
+            "t_human_last_contact_ms", "t_robot_first_contact_ms", "t_robot_last_contact_ms"
         ]
         validate_csv_columns(df, required_columns, "prediction")
         return df
@@ -117,7 +132,8 @@ def validate_ground_truth_csv(csv_path: str) -> pd.DataFrame:
         
         # Example required columns - adjust based on actual ground truth format
         required_columns = [
-            "width_at_the_top", "width_at_the_bottom", "height", "volume"
+            "config_id", "mass", "width_top", "width_bottom", "height",
+            "volume", "filling_amount_ml", "filling_amount_g", "total_mass", "fullness"
         ]
         validate_csv_columns(df, required_columns, "ground truth")
         return df
@@ -126,6 +142,269 @@ def validate_ground_truth_csv(csv_path: str) -> pd.DataFrame:
         raise ValueError(f"Failed to parse ground truth CSV: {e}")
     except Exception as e:
         raise ValueError(f"Error loading ground truth CSV: {e}")
+
+
+def _add_error(errors: List[str], msg: str):
+    errors.append(msg)
+
+def _add_warning(warnings: List[str], msg: str):
+    warnings.append(msg)
+
+def validate_metadata_json(json_path: str) -> Dict[str, Any]:
+    """
+    Validate a submission metadata JSON file.
+
+    Returns a dict:
+      {
+        "valid": bool,
+        "errors": [ ... ],
+        "warnings": [ ... ],
+        "summary": { ... }  # key extracted values for quick inspection
+      }
+
+    Checks performed (not exhaustive):
+      - JSON loads correctly
+      - Required top-level sections exist
+      - Types for common fields (ints, bools, lists, dicts)
+      - Consistency checks:
+          * participants.num_human_subjects == len(participants.subject_ids)
+          * each subject id present in demographics keys
+          * configuration_file.num_configurations == execution_policy.num_configurations
+          * table_dimensions_mm is length 3 and numeric
+          * video_fps is positive integer
+          * execution_policy.runs_per_configuration positive integer
+          * physical_assumptions.density_rice_g_per_ml is numeric and within plausible range
+      - Flags empty-but-present strings for fields that are likely required
+    """
+    errors: List[str] = []
+    warnings: List[str] = []
+    summary: Dict[str, Any] = {}
+
+    # Load JSON
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            metadata = json.load(f)
+    except Exception as e:
+        return {"valid": False, "errors": [f"Failed to load JSON: {e}"], "warnings": [], "summary": {}}
+
+    # Top-level keys expected
+    expected_top_keys = [
+        "submission_version", "submission_timestamp", "protocol_version", "team",
+        "ethics", "participants", "hardware", "environment",
+        "software_and_models", "annotation_protocol", "configuration_file",
+        "physical_assumptions", "learning_policy", "execution_policy"
+    ]
+    for k in expected_top_keys:
+        if k not in metadata:
+            _add_error(errors, f"Missing top-level key: '{k}'")
+
+    # Quick summary extraction (if present)
+    summary["submission_version"] = metadata.get("submission_version")
+    summary["protocol_version"] = metadata.get("protocol_version")
+    summary["num_human_subjects"] = None
+    if "participants" in metadata and isinstance(metadata["participants"], dict):
+        summary["num_human_subjects"] = metadata["participants"].get("num_human_subjects")
+
+    # Validate participants block
+    participants = metadata.get("participants")
+    if not isinstance(participants, dict):
+        _add_error(errors, "participants must be an object/dictionary")
+    else:
+        nh = participants.get("num_human_subjects")
+        ids = participants.get("subject_ids")
+        demographics = participants.get("demographics")
+
+        # num_human_subjects
+        if nh is None:
+            _add_error(errors, "participants.num_human_subjects is missing")
+        else:
+            if not isinstance(nh, int):
+                _add_error(errors, "participants.num_human_subjects must be an integer")
+            elif nh < 0:
+                _add_error(errors, "participants.num_human_subjects must be non-negative")
+
+        # subject_ids
+        if ids is None:
+            _add_error(errors, "participants.subject_ids is missing")
+        else:
+            if not isinstance(ids, list):
+                _add_error(errors, "participants.subject_ids must be a list")
+            else:
+                # check uniqueness
+                if len(ids) != len(set(ids)):
+                    _add_warning(warnings, "Duplicate entries found in participants.subject_ids")
+                # check count consistency
+                if isinstance(nh, int) and len(ids) != nh:
+                    _add_error(errors, f"participants.num_human_subjects ({nh}) does not match length of subject_ids ({len(ids)})")
+
+        # demographics mapping
+        if demographics is None:
+            _add_warning(warnings, "participants.demographics is missing")
+        else:
+            if not isinstance(demographics, dict):
+                _add_error(errors, "participants.demographics must be a dictionary mapping subject_id -> demographics")
+            else:
+                # ensure each subject id has an entry
+                if isinstance(ids, list):
+                    for sid in ids:
+                        if sid not in demographics:
+                            _add_warning(warnings, f"Subject id '{sid}' missing in participants.demographics")
+                # check fields for each demographic entry
+                for sid, demo in demographics.items():
+                    if not isinstance(demo, dict):
+                        _add_error(errors, f"participants.demographics['{sid}'] must be an object/dict")
+                    else:
+                        # optional fields: age_group, gender, dominant_hand, experience_level
+                        # flag if they are present but empty strings
+                        for fld in ["age_group", "gender", "dominant_hand", "experience_level"]:
+                            if fld in demo and isinstance(demo[fld], str) and demo[fld].strip() == "":
+                                _add_warning(warnings, f"participants.demographics['{sid}'].{fld} is empty")
+
+    # Validate configuration counts
+    config_file = metadata.get("configuration_file", {})
+    exec_policy = metadata.get("execution_policy", {})
+    if isinstance(config_file, dict):
+        cfg_num = config_file.get("num_configurations")
+        if cfg_num is None:
+            _add_error(errors, "configuration_file.num_configurations is missing")
+        else:
+            if not isinstance(cfg_num, int):
+                _add_error(errors, "configuration_file.num_configurations must be an integer")
+            elif cfg_num <= 0:
+                _add_error(errors, "configuration_file.num_configurations must be positive")
+    else:
+        _add_error(errors, "configuration_file must be an object/dict")
+
+    if isinstance(exec_policy, dict):
+        exec_num = exec_policy.get("num_configurations")
+        runs = exec_policy.get("runs_per_configuration")
+        if exec_num is None:
+            _add_error(errors, "execution_policy.num_configurations is missing")
+        else:
+            if not isinstance(exec_num, int):
+                _add_error(errors, "execution_policy.num_configurations must be an integer")
+            elif exec_num <= 0:
+                _add_error(errors, "execution_policy.num_configurations must be positive")
+        if isinstance(cfg_num, int) and isinstance(exec_num, int):
+            if cfg_num != exec_num:
+                _add_error(errors, f"configuration_file.num_configurations ({cfg_num}) != execution_policy.num_configurations ({exec_num})")
+        if runs is None:
+            _add_warning(warnings, "execution_policy.runs_per_configuration is missing")
+        else:
+            if not isinstance(runs, int) or runs <= 0:
+                _add_error(errors, "execution_policy.runs_per_configuration must be a positive integer")
+    else:
+        _add_error(errors, "execution_policy must be an object/dict")
+
+    # Validate environment.table_dimensions_mm
+    env = metadata.get("environment", {})
+    if not isinstance(env, dict):
+        _add_error(errors, "environment must be an object/dict")
+    else:
+        td = env.get("table_dimensions_mm")
+        if td is None:
+            _add_warning(warnings, "environment.table_dimensions_mm is missing")
+        else:
+            if not isinstance(td, list):
+                _add_error(errors, "environment.table_dimensions_mm must be a list of three numbers [length, width, height]")
+            else:
+                if len(td) != 3:
+                    _add_error(errors, "environment.table_dimensions_mm must have exactly 3 elements")
+                else:
+                    # use numpy to check numeric and positive
+                    try:
+                        arr = np.array(td, dtype=float)
+                        if np.any(arr <= 0):
+                            _add_error(errors, "environment.table_dimensions_mm values must be positive numbers")
+                    except Exception:
+                        _add_error(errors, "environment.table_dimensions_mm must contain numeric values")
+
+    # Validate annotation_protocol.video_fps
+    ann = metadata.get("annotation_protocol", {})
+    if isinstance(ann, dict):
+        fps = ann.get("video_fps")
+        if fps is None:
+            _add_warning(warnings, "annotation_protocol.video_fps is missing")
+        else:
+            if not (isinstance(fps, int) and fps > 0):
+                _add_error(errors, "annotation_protocol.video_fps must be a positive integer")
+    else:
+        _add_warning(warnings, "annotation_protocol missing or not an object")
+
+    # Validate physical_assumptions.density_rice_g_per_ml
+    phys = metadata.get("physical_assumptions", {})
+    if isinstance(phys, dict):
+        density = phys.get("density_rice_g_per_ml")
+        if density is None:
+            _add_warning(warnings, "physical_assumptions.density_rice_g_per_ml is missing")
+        else:
+            try:
+                dval = float(density)
+                if not (0.1 <= dval <= 2.0):
+                    _add_warning(warnings, f"physical_assumptions.density_rice_g_per_ml ({dval}) is outside typical plausible range (0.1-2.0 g/ml)")
+            except Exception:
+                _add_error(errors, "physical_assumptions.density_rice_g_per_ml must be numeric")
+    else:
+        _add_warning(warnings, "physical_assumptions missing or not an object")
+
+    # Validate hardware.sensors keys are booleans
+    hw = metadata.get("hardware", {})
+    if isinstance(hw, dict):
+        sensors = hw.get("sensors")
+        if sensors is None:
+            _add_warning(warnings, "hardware.sensors is missing")
+        else:
+            if not isinstance(sensors, dict):
+                _add_error(errors, "hardware.sensors must be an object/dict")
+            else:
+                for sname, sval in sensors.items():
+                    if not isinstance(sval, bool):
+                        _add_warning(warnings, f"hardware.sensors.{sname} expected boolean but got {type(sval).__name__}")
+
+    # Validate camera_setup structure (basic)
+    cam = env.get("camera_setup", {})
+    if isinstance(cam, dict):
+        # side_cameras should be list
+        sc = cam.get("side_cameras")
+        if sc is not None and not isinstance(sc, list):
+            _add_warning(warnings, "environment.camera_setup.side_cameras should be a list")
+        # overhead_camera should be dict or empty
+        oc = cam.get("overhead_camera")
+        if oc is not None and not isinstance(oc, dict):
+            _add_warning(warnings, "environment.camera_setup.overhead_camera should be an object/dict")
+    # Validate timestamps and strings that are likely required
+    if isinstance(metadata.get("submission_timestamp"), str) and metadata.get("submission_timestamp").strip() == "":
+        _add_warning(warnings, "submission_timestamp is empty")
+    if isinstance(metadata.get("team"), str) and metadata.get("team").strip() == "":
+        _add_warning(warnings, "team is empty")
+
+    # Cross-check: video_recording_required vs annotation_protocol.video_annotation_used
+    exec_video_required = exec_policy.get("video_recording_required") if isinstance(exec_policy, dict) else None
+    ann_video_used = ann.get("video_annotation_used") if isinstance(ann, dict) else None
+    if exec_video_required is True and ann_video_used is False:
+        _add_warning(warnings, "execution_policy.video_recording_required is True but annotation_protocol.video_annotation_used is False")
+
+    # Use pandas to create a small dataframe for subject demographics if available
+    try:
+        if isinstance(participants, dict) and isinstance(participants.get("demographics"), dict):
+            demo = participants.get("demographics")
+            # convert to DataFrame with one row per subject
+            df = pd.DataFrame.from_dict(demo, orient='index')
+            summary["demographics_table_shape"] = df.shape
+            # flag if all demographic fields are empty for all subjects
+            if df.applymap(lambda x: isinstance(x, str) and x.strip() == "").all().all():
+                _add_warning(warnings, "All demographic fields are present but empty for all subjects")
+    except Exception:
+        _add_warning(warnings, "Failed to build demographics DataFrame for deeper checks")
+
+    valid = len(errors) == 0
+    return {
+        "valid": valid,
+        "errors": errors,
+        "warnings": warnings,
+        "summary": summary,
+        "metadata": metadata
+    }
  
  
 # ============================================================================
@@ -161,8 +440,39 @@ def run_benchmark_evaluation(args) -> dict:
     try:
         # Step 1: Load and validate CSVs
         logger.info("Step 1: Loading and validating input files...")
-        df_pred = validate_prediction_csv(args.submission_csv)
+
+        try:
+            from benchmark.submission_validator import SubmissionValidator
+        except ImportError:
+            raise RuntimeError(
+                "submission_validator module not found. "
+                "Ensure submission_validator.py is in the Python path."
+            )
+
+        validator = SubmissionValidator()
+        is_valid = validator.validate_file(args.submission_csv)
+        validator.print_report()
+    
+        summary = validator.get_summary()
+        print(f"\nSummary: {summary['total_rows']} rows, {summary['errors']} errors, {summary['warnings']} warnings")
+
+        df_pred = validator.get_dataframe()
+        
         df_gts = validate_ground_truth_csv(args.ground_truth_csv)
+
+        report = validate_metadata_json(args.metadata)
+        print("Valid:", report["valid"])
+        if report["errors"]:
+            print("Errors:")
+            for e in report["errors"]:
+                print(" -", e)
+        if report["warnings"]:
+            print("Warnings:")
+            for w in report["warnings"]:
+                print(" -", w)
+        print("Summary:", report["summary"])
+
+        target_location = np.asarray(report["metadata"]["execution_policy"]["target_delivery_location"])
         
         # Step 2: Initialize evaluator
         logger.info("Step 2: Initializing CORSMAL Evaluation Toolkit...")
@@ -175,16 +485,10 @@ def run_benchmark_evaluation(args) -> dict:
         
         # Step 3: Run benchmark evaluation
         logger.info("Step 3: Running benchmark evaluation...")
-        evaluator.run_benchmark_evaluation(df_pred, df_gts)
-        
-        # Step 4: Compute group scores
-        logger.info("Step 4: Computing aggregated scores...")
-        evaluator.compute_vision_score()
-        evaluator.compute_robot_score()
-        evaluator.compute_task_score()
-        evaluator.compute_benchmark_score()
+        evaluator.run_benchmark_evaluation(df_pred, df_gts, target_location)
         
         # Step 5: Extract results
+        logger.info("Step 4: Extract results...")
         results = {
             "individual_scores": evaluator.get_all_scores(),
             "benchmark_score": evaluator.get_benchmark_score(),
@@ -192,11 +496,6 @@ def run_benchmark_evaluation(args) -> dict:
             "robot_score": evaluator.get_robot_score(),
             "task_score": evaluator.get_task_score(),
         }
-        
-        # Optionally compute detailed aggregations
-        if args.save_detailed:
-            logger.info("Computing aggregated statistics...")
-            results["aggregated_stats"] = evaluator.compute_aggregated_scores()
         
         logger.info("✓ Benchmark evaluation completed successfully")
         return results
@@ -325,10 +624,10 @@ def print_results_summary(results: dict) -> None:
     logger.info("=" * 70)
     
     # Print main scores
-    logger.info(f"Benchmark Score:  {results.get('benchmark_score', 0.0):.4f}")
-    logger.info(f"Vision Score:     {results.get('vision_score', 0.0):.4f}")
-    logger.info(f"Robot Score:      {results.get('robot_score', 0.0):.4f}")
-    logger.info(f"Task Score:       {results.get('task_score', 0.0):.4f}")
+    logger.info(f"Benchmark Score:  {results.get('benchmark_score', 0.0)*100:.2f}")
+    logger.info(f"Vision Score:     {results.get('vision_score', 0.0)*100:.2f}")
+    logger.info(f"Robot Score:      {results.get('robot_score', 0.0)*100:.2f}")
+    logger.info(f"Task Score:       {results.get('task_score', 0.0)*100:.2f}")
     
     # Print detailed scores if available
     individual_scores = results.get("individual_scores", {})
@@ -337,17 +636,17 @@ def print_results_summary(results: dict) -> None:
         logger.info("-" * 70)
         logger.info("Detailed Vision Scores:")
         for key, val in individual_scores["vision"].items():
-            logger.info(f"  {key:20s}: {val:.4f}")
+            logger.info(f"  {key:20s}: {val*100:.2f}")
     
     if individual_scores.get("robot"):
         logger.info("Detailed Robot Scores:")
         for key, val in individual_scores["robot"].items():
-            logger.info(f"  {key:20s}: {val:.4f}")
+            logger.info(f"  {key:20s}: {val*100:.2f}")
     
     if individual_scores.get("task"):
         logger.info("Detailed Task Scores:")
         for key, val in individual_scores["task"].items():
-            logger.info(f"  {key:20s}: {val:.4f}")
+            logger.info(f"  {key:20s}: {val*100:.2f}")
     
     logger.info("=" * 70)
 
@@ -394,6 +693,13 @@ def get_parser() -> ArgumentParser:
         required=True,
         type=existing_file,
         help="Path to the submission CSV file with predictions."
+    )
+
+    parser.add_argument(
+        "--metadata",
+        type=existing_file,
+        default=None,
+        help="Path to the ground truth CSV file (required for --benchmark mode)."
     )
  
     parser.add_argument(

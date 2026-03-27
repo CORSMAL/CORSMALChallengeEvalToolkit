@@ -28,22 +28,21 @@
     "notes": "Demographic fields are optional and should not include personally identifiable information."
   },
 
-  "robot_hardware": {
+  "hardware": {
     "arm_model": "",
     "dof": null,
     "gripper_model": "",
+    "controller": "",
+    "mounting": "",
     "sensors": {
       "force_torque": false,
       "gripper_pressure": false,
       "tactile_sensors": false,
       "vision_sensors": true
-    },
-    "controller": "",
-    "mounting": ""
+    }
   },
 
   "environment": {
-    "robot_platform": "",
     "sensing_setup_description": "",
     "table_dimensions_mm": [1200, 800, 750],
     "illumination": {
@@ -54,6 +53,7 @@
       "side_cameras": [],
       "overhead_camera": {}
     },
+    "calibration_notes": "",
     "notes": ""
   },
 
@@ -67,7 +67,7 @@
   "annotation_protocol": {
     "timing_annotation_method": "manual_video_annotation",
     "annotator_training": "",
-    "video_fps": 60,
+    "video_fps": 30,
     "video_annotation_used": false,
     "video_annotation_description": ""
   },
@@ -81,7 +81,6 @@
 
   "physical_assumptions": {
     "density_rice_g_per_ml": 0.81,
-    "fill_level_definition_percent": 90,
     "placement_reference_frame": "cup_initial_position_center_of_base"
   },
 
@@ -96,12 +95,7 @@
     "num_configurations": 288,
     "runs_per_configuration": 1,
     "video_recording_required": true,
-    "delivery_location_policy": "same_as_initial_location"
-  },
-
-  "submission_details": {
-    "submission_timestamp": "",
-    "software_version": "",
-    "calibration_notes": ""
+    "delivery_location_policy": "same_as_initial_location",
+    "target_delivery_location" : [500.0, 300.0, 0.0]
   }
 }
