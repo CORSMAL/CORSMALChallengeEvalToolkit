@@ -21,7 +21,7 @@ from pathlib import Path
  
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 
 from loguru import logger
 
@@ -142,6 +142,31 @@ def validate_ground_truth_csv(csv_path: str) -> pd.DataFrame:
         raise ValueError(f"Failed to parse ground truth CSV: {e}")
     except Exception as e:
         raise ValueError(f"Error loading ground truth CSV: {e}")
+
+def load_configs(csv_path: str) -> pd.DataFrame:
+    """
+    Load and validate benchmark configurations CSV format.
+    
+    Args:
+        csv_path: Path to the benchmark configurations CSV file
+    
+    Returns:
+        pd.DataFrame: Dataframe with benchmark configurations
+        
+    Raises:
+        ValueError: If validation fails
+    """
+    try:
+        df = pd.read_csv(csv_path)
+        logger.info(f"Loaded benchmark configuration from: {csv_path}")
+        logger.debug(f"Shape: {df.shape}, Columns: {list(df.columns)}")
+
+        return df
+
+    except pd.errors.ParserError as e:
+        raise ValueError(f"Failed to parse benchmark configuration CSV: {e}")
+    except Exception as e:
+        raise ValueError(f"Error loading benchmark configuration  CSV: {e}")
 
 
 def _add_error(errors: List[str], msg: str):
@@ -410,6 +435,147 @@ def validate_metadata_json(json_path: str) -> Dict[str, Any]:
 # ============================================================================
 # Evaluation Functions
 # ============================================================================
+def _validate_and_align_dataframes(
+    df_pred: pd.DataFrame,
+    df_gts: pd.DataFrame,
+    df_configs: pd.DataFrame,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Validate and align df_pred, df_gts and df_configs.
+
+    Strategy:
+      1. If all three share identical indices -> merge on index (preserve indices).
+      2. Else if lengths are equal -> align by position (reset index and concat).
+      3. Else -> raise ValueError (ambiguous alignment).
+
+    Returns:
+      merged_pred, merged_gts  (each is original df with config columns appended)
+    """
+    # Quick checks
+    if df_pred.index.equals(df_gts.index) and df_pred.index.equals(df_configs.index):
+        # Merge by index
+        merged_pred = pd.concat([df_pred, df_configs], axis=1)
+        merged_gts = pd.concat([df_gts, df_configs], axis=1)
+        return merged_pred, merged_gts
+
+    # If indices differ but lengths match, align by position
+    if len(df_pred) == len(df_gts) == len(df_configs):
+        merged_pred = pd.concat([df_pred.reset_index(drop=True), df_configs.reset_index(drop=True)], axis=1)
+        merged_gts = pd.concat([df_gts.reset_index(drop=True), df_configs.reset_index(drop=True)], axis=1)
+        return merged_pred, merged_gts
+
+    # Ambiguous alignment
+    raise ValueError(
+        "Cannot safely align df_pred, df_gts and df_configs: indices differ and lengths are not equal. "
+        "Ensure they share the same index or have the same number of rows."
+    )
+
+
+def run_grouped_evaluations(
+    evaluator,
+    df_pred: pd.DataFrame,
+    df_gts: pd.DataFrame,
+    df_configs: pd.DataFrame,
+    target_location,
+    results: Dict[str, Optional[float]],
+) -> pd.DataFrame:
+    """
+    Run evaluator for multiple groups, validate inputs, update results dict, and return a structured summary DataFrame.
+
+    Args:
+      evaluator: object with methods reset_all_scores(), run_benchmark_evaluation(pred, gt, target), get_benchmark_score()
+      df_pred: predictions DataFrame
+      df_gts: ground-truth DataFrame
+      df_configs: configuration DataFrame (columns used for grouping: e.g., 'cup','fullness','grasp','location')
+      target_location: passed to evaluator.run_benchmark_evaluation
+      results: dict to be updated with descriptive keys for each group
+
+    Returns:
+      summary_df: DataFrame with columns:
+        - Timestamp (YYYY-MM-DD HH:MM:SS)
+        - team
+        - group_type (e.g., 'cup', 'fullness', 'grasp', 'location')
+        - group_value (e.g., 'white cup', 'empty', 'grasp1', 'left')
+        - result_key (e.g., 'score_white_cup')
+        - score (float or None)
+        - score_pct (string like '95.00%' or empty string for None)
+    """
+    # Validate and align
+    merged_pred, merged_gts = _validate_and_align_dataframes(df_pred, df_gts, df_configs)
+
+    # Declarative group list: (configs_column, configs_value, results_key)
+    GROUPS: List[Tuple[str, str, str]] = [
+        # cups
+        ("cup", "white cup", "score_white_cup"),
+        ("cup", "red cup", "score_red_cup"),
+        ("cup", "beer cup", "score_beer_cup"),
+        ("cup", "wine glass", "score_wine_glass"),
+        # fullness
+        ("fullness", "empty", "score_empty"),
+        ("fullness", "filled", "score_filled"),
+        # grasps
+        ("grasp", "grasp1", "score_grasp1"),
+        ("grasp", "grasp2", "score_grasp2"),
+        ("grasp", "grasp3", "score_grasp3"),
+        ("grasp", "grasp4", "score_grasp4"),
+        # locations
+        ("location", "left", "score_loc_left"),
+        ("location", "right", "score_loc_right"),
+        ("location", "centre", "score_loc_centre"),
+    ]
+
+    rows = []
+
+    for col, val, key in GROUPS:
+        score_value: Optional[float] = None
+        try:
+            if col not in merged_pred.columns:
+                # Column missing in merged dataframes -> treat as empty subset
+                logger.warning("Config column '%s' not present; skipping group %s=%s", col, col, val)
+                results[key] = None
+                score_value = None
+            else:
+                pred_subset = merged_pred[merged_pred[col].eq(val)]
+                gt_subset = merged_gts[merged_gts[col].eq(val)]
+
+                if pred_subset.empty or gt_subset.empty:
+                    logger.info("No rows for %s=%s; setting %s = None", col, val, key)
+                    results[key] = None
+                    score_value = None
+                else:
+                    evaluator.reset_all_scores()
+                    evaluator.run_benchmark_evaluation(pred_subset, gt_subset, target_location)
+                    score_value = evaluator.get_benchmark_score()
+                    results[key] = score_value
+
+        except Exception as exc:
+            logger.exception("Evaluation failed for %s=%s (key=%s): %s", col, val, key, exc)
+            results[key] = None
+            score_value = None
+
+        # Format percentage string (two decimals) or empty string for None
+        if score_value is None or (isinstance(score_value, float) and pd.isna(score_value)):
+            score_pct = ""
+        else:
+            try:
+                score_pct = f"{float(score_value) * 100:.2f}%"
+            except Exception:
+                score_pct = ""
+
+        rows.append(
+            {
+                "group_type": col,
+                "group_value": val,
+                "result_key": key,
+                "score": score_value,
+                "score_pct": score_pct,
+            }
+        )
+
+    summary_df = pd.DataFrame(rows)
+
+    # Return a structured summary (one row per group)
+    return summary_df
  
 def run_benchmark_evaluation(args) -> dict:
     """
@@ -473,6 +639,10 @@ def run_benchmark_evaluation(args) -> dict:
         print("Summary:", report["summary"])
 
         target_location = np.asarray(report["metadata"]["execution_policy"]["target_delivery_location"])
+
+        configs_fn = os.path.join("resources", "benchmark", "benchmark_configs.csv")
+        df_configs = load_configs(configs_fn)
+        
         
         # Step 2: Initialize evaluator
         logger.info("Step 2: Initializing CORSMAL Evaluation Toolkit...")
@@ -487,17 +657,19 @@ def run_benchmark_evaluation(args) -> dict:
         logger.info("Step 3: Running benchmark evaluation...")
         evaluator.run_benchmark_evaluation(df_pred, df_gts, target_location)
         
-        # Step 5: Extract results
+        # Step 4: Extract results
         logger.info("Step 4: Extract results...")
         results = {
+            "team" : report["metadata"]["team"],
             "individual_scores": evaluator.get_all_scores(),
             "benchmark_score": evaluator.get_benchmark_score(),
             "vision_score": evaluator.get_vision_score(),
             "robot_score": evaluator.get_robot_score(),
-            "task_score": evaluator.get_task_score(),
-            "team" : report["metadata"]["team"]
+            "task_score": evaluator.get_task_score()
         }
-        
+
+        # groups_res = run_grouped_evaluations(evaluator, df_pred, df_gts, df_configs, target_location, results)
+
         logger.info("✓ Benchmark evaluation completed successfully")
         return results
         
