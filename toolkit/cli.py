@@ -435,40 +435,55 @@ def validate_metadata_json(json_path: str) -> Dict[str, Any]:
 # ============================================================================
 # Evaluation Functions
 # ============================================================================
-def _validate_and_align_dataframes(
-    df_pred: pd.DataFrame,
-    df_gts: pd.DataFrame,
-    df_configs: pd.DataFrame,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def _validate_alignment_strategy(
+    df_pred: pd.DataFrame, df_gts: pd.DataFrame, df_configs: pd.DataFrame
+) -> str:
     """
-    Validate and align df_pred, df_gts and df_configs.
-
-    Strategy:
-      1. If all three share identical indices -> merge on index (preserve indices).
-      2. Else if lengths are equal -> align by position (reset index and concat).
-      3. Else -> raise ValueError (ambiguous alignment).
-
-    Returns:
-      merged_pred, merged_gts  (each is original df with config columns appended)
+    Decide alignment strategy:
+      - "index": all three share identical index
+      - "position": lengths equal but indices differ
+      - raises ValueError if ambiguous
     """
-    # Quick checks
     if df_pred.index.equals(df_gts.index) and df_pred.index.equals(df_configs.index):
-        # Merge by index
-        merged_pred = pd.concat([df_pred, df_configs], axis=1)
-        merged_gts = pd.concat([df_gts, df_configs], axis=1)
-        return merged_pred, merged_gts
-
-    # If indices differ but lengths match, align by position
+        return "index"
     if len(df_pred) == len(df_gts) == len(df_configs):
-        merged_pred = pd.concat([df_pred.reset_index(drop=True), df_configs.reset_index(drop=True)], axis=1)
-        merged_gts = pd.concat([df_gts.reset_index(drop=True), df_configs.reset_index(drop=True)], axis=1)
-        return merged_pred, merged_gts
-
-    # Ambiguous alignment
+        return "position"
     raise ValueError(
         "Cannot safely align df_pred, df_gts and df_configs: indices differ and lengths are not equal. "
         "Ensure they share the same index or have the same number of rows."
     )
+
+
+def _select_subsets(
+    df_pred: pd.DataFrame,
+    df_gts: pd.DataFrame,
+    df_configs: pd.DataFrame,
+    col: str,
+    val,
+    strategy: str,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Return (pred_subset, gt_subset) for the given config column/value using the chosen strategy.
+    - strategy == "index": use boolean mask on df_configs and select by index from df_pred/df_gts
+    - strategy == "position": reset indices and select by position mask
+    """
+    if col not in df_configs.columns:
+        # Column missing -> return empty subsets with same columns as originals
+        return df_pred.iloc[0:0], df_gts.iloc[0:0]
+
+    if strategy == "index":
+        mask = df_configs[col].eq(val)
+        idx = df_configs.index[mask]
+        pred_subset = df_pred.loc[idx]
+        gt_subset = df_gts.loc[idx]
+        return pred_subset, gt_subset
+
+    # position strategy
+    cfg_vals = df_configs.reset_index(drop=True)[col]
+    mask = cfg_vals.eq(val)
+    pred_subset = df_pred.reset_index(drop=True).loc[mask]
+    gt_subset = df_gts.reset_index(drop=True).loc[mask]
+    return pred_subset, gt_subset
 
 
 def run_grouped_evaluations(
@@ -478,6 +493,9 @@ def run_grouped_evaluations(
     df_configs: pd.DataFrame,
     target_location,
     results: Dict[str, Optional[float]],
+    *,
+    groups: Optional[List[Tuple[str, str, str]]] = None,
+    empty_policy: str = "none",  # "none" -> None, "zero" -> 0.0
 ) -> pd.DataFrame:
     """
     Run evaluator for multiple groups, validate inputs, update results dict, and return a structured summary DataFrame.
@@ -492,61 +510,56 @@ def run_grouped_evaluations(
 
     Returns:
       summary_df: DataFrame with columns:
-        - Timestamp (YYYY-MM-DD HH:MM:SS)
-        - team
         - group_type (e.g., 'cup', 'fullness', 'grasp', 'location')
         - group_value (e.g., 'white cup', 'empty', 'grasp1', 'left')
         - result_key (e.g., 'score_white_cup')
         - score (float or None)
         - score_pct (string like '95.00%' or empty string for None)
     """
-    # Validate and align
-    merged_pred, merged_gts = _validate_and_align_dataframes(df_pred, df_gts, df_configs)
+    # Default declarative groups if not provided
+    if groups is None:
+        groups = [
+            # cups
+            ("cup", "white cup", "score_white_cup"),
+            ("cup", "red cup", "score_red_cup"),
+            ("cup", "beer cup", "score_beer_cup"),
+            ("cup", "wine glass", "score_wine_glass"),
+            # fullness
+            ("fullness", "empty", "score_empty"),
+            ("fullness", "filled", "score_filled"),
+            # grasps
+            ("grasp_type", "bottom", "score_grasp1"),
+            ("grasp_type", "top", "score_grasp2"),
+            ("grasp_type", "natural", "score_grasp3"),
+            # locations
+            ("handover_location", "left", "score_loc_left"),
+            ("handover_location", "right", "score_loc_right"),
+            ("handover_location", "center", "score_loc_centre"),
+        ]
 
-    # Declarative group list: (configs_column, configs_value, results_key)
-    GROUPS: List[Tuple[str, str, str]] = [
-        # cups
-        ("cup", "white cup", "score_white_cup"),
-        ("cup", "red cup", "score_red_cup"),
-        ("cup", "beer cup", "score_beer_cup"),
-        ("cup", "wine glass", "score_wine_glass"),
-        # fullness
-        ("fullness", "empty", "score_empty"),
-        ("fullness", "filled", "score_filled"),
-        # grasps
-        ("grasp", "grasp1", "score_grasp1"),
-        ("grasp", "grasp2", "score_grasp2"),
-        ("grasp", "grasp3", "score_grasp3"),
-        ("grasp", "grasp4", "score_grasp4"),
-        # locations
-        ("location", "left", "score_loc_left"),
-        ("location", "right", "score_loc_right"),
-        ("location", "centre", "score_loc_centre"),
-    ]
+    # Decide alignment strategy
+    strategy = _validate_alignment_strategy(df_pred, df_gts, df_configs)
 
     rows = []
 
-    for col, val, key in GROUPS:
+    for col, val, key in groups:
         score_value: Optional[float] = None
         try:
-            if col not in merged_pred.columns:
-                # Column missing in merged dataframes -> treat as empty subset
-                logger.warning("Config column '%s' not present; skipping group %s=%s", col, col, val)
-                results[key] = None
-                score_value = None
-            else:
-                pred_subset = merged_pred[merged_pred[col].eq(val)]
-                gt_subset = merged_gts[merged_gts[col].eq(val)]
+            pred_subset, gt_subset = _select_subsets(df_pred, df_gts, df_configs, col, val, strategy)
 
-                if pred_subset.empty or gt_subset.empty:
-                    logger.info("No rows for %s=%s; setting %s = None", col, val, key)
-                    results[key] = None
-                    score_value = None
+            if pred_subset.empty or gt_subset.empty:
+                # Apply empty policy
+                if empty_policy == "zero":
+                    score_value = 0.0
                 else:
-                    evaluator.reset_all_scores()
-                    evaluator.run_benchmark_evaluation(pred_subset, gt_subset, target_location)
-                    score_value = evaluator.get_benchmark_score()
-                    results[key] = score_value
+                    score_value = None
+                results[key] = score_value
+                logger.info("No rows for %s=%s; setting %s = %s", col, val, key, score_value)
+            else:
+                evaluator.reset_all_scores()
+                evaluator.run_benchmark_evaluation(pred_subset, gt_subset, target_location)
+                score_value = evaluator.get_benchmark_score()
+                results[key] = score_value
 
         except Exception as exc:
             logger.exception("Evaluation failed for %s=%s (key=%s): %s", col, val, key, exc)
@@ -659,16 +672,9 @@ def run_benchmark_evaluation(args) -> dict:
         
         # Step 4: Extract results
         logger.info("Step 4: Extract results...")
-        results = {
-            "team" : report["metadata"]["team"],
-            "individual_scores": evaluator.get_all_scores(),
-            "benchmark_score": evaluator.get_benchmark_score(),
-            "vision_score": evaluator.get_vision_score(),
-            "robot_score": evaluator.get_robot_score(),
-            "task_score": evaluator.get_task_score()
-        }
-
-        # groups_res = run_grouped_evaluations(evaluator, df_pred, df_gts, df_configs, target_location, results)
+        results = evaluator.get_all_scores()
+        results["team"] = report["metadata"]["team"]
+        groups_res = run_grouped_evaluations(evaluator, df_pred, df_gts, df_configs, target_location, results)
 
         logger.info("✓ Benchmark evaluation completed successfully")
         return results
@@ -741,8 +747,6 @@ def save_results(results: dict, output_dir: str) -> None:
     """
     ensure_output_directory(output_dir)
 
-    scores = results.get("individual_scores", {})
-
     # Stable schemas
     VISION_SCHEMA = ["width_top", "width_bottom", "height", "mass", "fullness"]
     ROBOT_SCHEMA = ["mass_robot", "hand_pose", "end_effector"]
@@ -754,10 +758,17 @@ def save_results(results: dict, output_dir: str) -> None:
         "time_robot_maneuvering"
     ]
 
+    GROUP_SCHEMA = [
+        "benchmark_score",
+        "score_white_cup", "score_red_cup", "score_beer_cup", "score_wine_glass", 
+        "score_empty", "score_filled", "score_grasp1", "score_grasp2", "score_grasp3", 
+        "score_loc_left", "score_loc_right", "score_loc_centre"
+    ]
+
     try:
         # --- Vision ---
-        if "vision" in scores:
-            vision_df = pd.DataFrame([scores["vision"]], index=["scores"])
+        if "vision" in results:
+            vision_df = pd.DataFrame([results["vision"]], index=["scores"])
         else:
             vision_df = pd.DataFrame(
                 {k: 0.0 for k in VISION_SCHEMA},
@@ -765,8 +776,8 @@ def save_results(results: dict, output_dir: str) -> None:
             )
 
         # --- Robot ---
-        if "robot" in scores:
-            robot_df = pd.DataFrame([scores["robot"]], index=["scores"])
+        if "robot" in results:
+            robot_df = pd.DataFrame([results["robot"]], index=["scores"])
         else:
             robot_df = pd.DataFrame(
                 {k: 0.0 for k in ROBOT_SCHEMA},
@@ -774,8 +785,8 @@ def save_results(results: dict, output_dir: str) -> None:
             )
 
         # --- Task ---
-        if "task" in scores:
-            task_df = pd.DataFrame([scores["task"]], index=["scores"])
+        if "task" in results:
+            task_df = pd.DataFrame([results["task"]], index=["scores"])
         else:
             task_df = pd.DataFrame(
                 {k: 0.0 for k in TASK_SCHEMA},
@@ -783,13 +794,13 @@ def save_results(results: dict, output_dir: str) -> None:
             )
 
         # --- Group scores ---
+        group_scores = results.get("group_scores", {})
         groups_df = pd.DataFrame(
             {
-                "vision_score": [results.get("vision_score", 0.0)],
-                "robot_score": [results.get("robot_score", 0.0)],
-                "task_score": [results.get("task_score", 0.0)],
-                "benchmark_score": [results.get("benchmark_score", 0.0)]
-            },
+                "vision_score": group_scores.get("vision_score"),
+                "robot_score": group_scores.get("robot_score"),
+                "task_score": group_scores.get("task_score"),
+            } | {k: results.get(k) for k in GROUP_SCHEMA},
             index=["scores"]
         )
 
@@ -854,27 +865,28 @@ def print_results_summary(results: dict) -> None:
     
     # Print main scores
     logger.info(f"Benchmark Score:  {results.get('benchmark_score', 0.0)*100:.2f}")
-    logger.info(f"Vision Score:     {results.get('vision_score', 0.0)*100:.2f}")
-    logger.info(f"Robot Score:      {results.get('robot_score', 0.0)*100:.2f}")
-    logger.info(f"Task Score:       {results.get('task_score', 0.0)*100:.2f}")
+
+    group_scores = results.get("group_scores", {})
+    if group_scores:
+        logger.info(f"Vision Score:     {group_scores.get('vision_score', 0.0)*100:.2f}")
+        logger.info(f"Robot Score:      {group_scores.get('robot_score', 0.0)*100:.2f}")
+        logger.info(f"Task Score:       {group_scores.get('task_score', 0.0)*100:.2f}")
     
     # Print detailed scores if available
-    individual_scores = results.get("individual_scores", {})
-    
-    if individual_scores.get("vision"):
+    if results.get("vision"):
         logger.info("-" * 70)
         logger.info("Detailed Vision Scores:")
-        for key, val in individual_scores["vision"].items():
+        for key, val in results["vision"].items():
             logger.info(f"  {key:20s}: {val*100:.2f}")
     
-    if individual_scores.get("robot"):
+    if results.get("robot"):
         logger.info("Detailed Robot Scores:")
-        for key, val in individual_scores["robot"].items():
+        for key, val in results["robot"].items():
             logger.info(f"  {key:20s}: {val*100:.2f}")
     
-    if individual_scores.get("task"):
+    if results.get("task"):
         logger.info("Detailed Task Scores:")
-        for key, val in individual_scores["task"].items():
+        for key, val in results["task"].items():
             logger.info(f"  {key:20s}: {val*100:.2f}")
     
     logger.info("=" * 70)
