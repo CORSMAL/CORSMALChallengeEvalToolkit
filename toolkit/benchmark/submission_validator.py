@@ -4,6 +4,9 @@ import sys
 from pathlib import Path
 from typing import Tuple
 
+from datetime import datetime
+
+from loguru import logger
 
 class SubmissionValidator:
     def __init__(self, workspace_bounds=None):
@@ -299,6 +302,243 @@ class SubmissionValidator:
             except (ValueError, IndexError):
                 pass
         return warnings_by_row
+    
+# ----------------------------
+
+class ReachabilityValidator(SubmissionValidator):
+    """
+    Validator for robotic reachability test CSV data.
+    
+    Validates:
+    - Required fields and data types
+    - Pose coordinates and quaternion normalization
+    - Motion timing: ±1ms tolerance between computed and recorded durations
+    - Temporal sequence: all 6 poses executed in single uninterrupted sequence
+    - Individual motion duration: max 5 seconds per motion
+    """
+    def __init__(self, max_motion_time_ms=5000):
+        """
+        Initialize validator.
+        
+        Args:
+            max_motion_time_ms: Maximum allowed duration for individual motion (default: 5000ms = 5s)
+        """
+        super().__init__()
+        self.max_motion_time_ms = max_motion_time_ms
+    
+    def _validate_row(self, row: pd.Series, row_num: int):
+        """
+        Validate individual row.
+        
+        Args:
+            row: DataFrame row to validate
+            row_num: Row number for error reporting
+        """
+        prefix = f"Row {row_num}: "
+        
+        # run_id
+        if pd.isna(row.get('run_id')) or row.get('run_id') == '':
+            self.errors.append(f"{prefix}run_id is required")
+        
+        # repetition
+        if pd.isna(row.get('repetition')) or row.get('repetition') == '':
+            self.errors.append(f"{prefix}repetition is required")
+        else:
+            rep = self._parse_int(row.get('repetition'))
+            if rep is not None and not (1 <= rep <= 3):
+                self.warnings.append(f"{prefix}repetition {rep} outside expected range [1, 3]")
+        
+        # target_id
+        if pd.isna(row.get('target_id')) or row.get('target_id') == '':
+            self.errors.append(f"{prefix}target_id is required")
+        else:
+            target_id = self._parse_int(row.get('target_id'))
+            if target_id is not None and not (1 <= target_id <= 6):
+                self.errors.append(f"{prefix}target_id must be in range [1, 6], got {target_id}")
+        
+        # Robot pose (XYZ)
+        for coord in ['x', 'y', 'z']:
+            key = f'{coord}'
+            val = self._parse_float(row.get(key))
+            if val is None:
+                self.errors.append(f"{prefix}{key} must be a float")
+            # elif not self._in_workspace(coord, val):
+            #     self.errors.append(f"{prefix}{key}={val} outside workspace bounds")
+        
+        # Quaternion
+        q_vals = []
+        for i in ['x', 'y', 'z', 'w']:
+            key = f'q{i}'
+            val = self._parse_float(row.get(key))
+            if val is None:
+                self.errors.append(f"{prefix}{key} must be a float")
+            else:
+                q_vals.append(val)
+        
+        if len(q_vals) == 4:
+            norm_sq = sum(q ** 2 for q in q_vals)
+            if not (0.99 <= norm_sq <= 1.01):
+                self.warnings.append(f"{prefix}Quaternion norm² = {norm_sq:.4f}, expect ≈ 1.0")
+        
+        # Validate motion_time_ms field
+        recorded_motion_time_ms = self._parse_int(row.get('motion_time_ms'))
+        if recorded_motion_time_ms is None:
+            self.errors.append(f"{prefix}motion_time_ms must be an integer")
+        elif recorded_motion_time_ms < 0:
+            self.errors.append(f"{prefix}motion_time_ms must be >= 0, got {recorded_motion_time_ms}")
+
+        # Validate timepoints
+        try:
+            start_time_str = row['start_time'].replace('Z', '+00:00')
+            end_time_str = row['end_time'].replace('Z', '+00:00')
+            
+            start_dt = datetime.fromisoformat(start_time_str)
+            end_dt = datetime.fromisoformat(end_time_str)
+            
+            # Check that end_time > start_time
+            if end_dt <= start_dt:
+                self.errors.append(f"{prefix}end_time must be after start_time")
+            
+            computed_motion_time_ms = int((end_dt - start_dt).total_seconds() * 1000)
+            
+            # Check against max allowed motion time
+            if computed_motion_time_ms > self.max_motion_time_ms:
+                self.errors.append(f"{prefix}Motion time {computed_motion_time_ms}ms exceeds "
+                                 f"maximum {self.max_motion_time_ms}ms")
+            
+            # Verify computed matches recorded (±1ms tolerance)
+            if recorded_motion_time_ms is not None:
+                motion_time_diff = abs(computed_motion_time_ms - recorded_motion_time_ms)
+                if motion_time_diff > 1:
+                    self.warnings.append(f"{prefix}Motion time mismatch: computed={computed_motion_time_ms}ms, "
+                                       f"recorded={recorded_motion_time_ms}ms, diff={motion_time_diff}ms")
+        
+        except (ValueError, KeyError, AttributeError) as e:
+            self.errors.append(f"{prefix}Invalid timestamp format: {e}")
+        
+    def _validate_temporal_sequence(self, df: pd.DataFrame):
+        """
+        Validate that all 6 poses are executed in a single uninterrupted sequence.
+        
+        For each repetition:
+        - All 6 target_ids (1-6) must be present
+        - Must execute in sequential order within each run_id/repetition
+        - Time gaps between consecutive motions must be minimal (no interruptions)
+        - Each motion must complete within max_motion_time_ms
+        
+        Args:
+            df: DataFrame with robot reachability data
+        """
+        # Group by run_id and repetition
+        for (run_id, repetition), group in df.groupby(['run_id', 'repetition']):
+            logger.info(f"Validating sequence: run_id={run_id}, repetition={repetition}")
+            
+            # Check that all 6 target_ids are present
+            target_ids_present = set(group['target_id'].unique())
+            expected_target_ids = set(range(1, 7))
+            
+            if target_ids_present != expected_target_ids:
+                missing = expected_target_ids - target_ids_present
+                extra = target_ids_present - expected_target_ids
+                if missing:
+                    self.errors.append(f"run_id={run_id}, repetition={repetition}: "
+                                     f"Missing target_ids: {sorted(missing)}")
+                if extra:
+                    self.warnings.append(f"run_id={run_id}, repetition={repetition}: "
+                                       f"Unexpected target_ids: {sorted(extra)}")
+            
+            # Sort by target_id to check sequence
+            group_sorted = group.sort_values('target_id').reset_index(drop=True)
+            
+            # Verify execution order (should be in ascending order of target_id)
+            actual_order = group_sorted['target_id'].tolist()
+            expected_order = sorted(actual_order)
+            if actual_order != expected_order:
+                self.warnings.append(f"run_id={run_id}, repetition={repetition}: "
+                                   f"Poses not executed in sequential order. "
+                                   f"Expected {expected_order}, got {actual_order}")
+            
+            # Check temporal continuity and gaps between poses
+            for idx in range(len(group_sorted) - 1):
+                current_row = group_sorted.iloc[idx]
+                next_row = group_sorted.iloc[idx + 1]
+                
+                current_target = int(current_row['target_id'])
+                next_target = int(next_row['target_id'])
+                
+                # Parse timestamps
+                try:
+                    current_end_str = current_row['end_time'].replace('Z', '+00:00')
+                    next_start_str = next_row['start_time'].replace('Z', '+00:00')
+                    
+                    current_end_dt = datetime.fromisoformat(current_end_str)
+                    next_start_dt = datetime.fromisoformat(next_start_str)
+                    
+                    # Check for gap between end of current and start of next
+                    gap_ms = int((next_start_dt - current_end_dt).total_seconds() * 1000)
+                    
+                    # Allow small tolerance for timing (e.g., 100ms) but warn if large gaps
+                    if gap_ms > 100:
+                        self.warnings.append(f"run_id={run_id}, repetition={repetition}: "
+                                           f"Large gap ({gap_ms}ms) between target {current_target} "
+                                           f"(end: {current_row['end_time']}) and target {next_target} "
+                                           f"(start: {next_row['start_time']})")
+                    
+                    # Check for negative gaps (overlapping timestamps)
+                    if gap_ms < 0:
+                        self.errors.append(f"run_id={run_id}, repetition={repetition}: "
+                                         f"Overlapping motions detected: target {current_target} "
+                                         f"ends after target {next_target} starts (gap: {gap_ms}ms)")
+                
+                except (ValueError, AttributeError) as e:
+                    self.errors.append(f"run_id={run_id}, repetition={repetition}: "
+                                     f"Timestamp parsing error: {e}")
+            
+            # Validate individual motion durations
+            for idx, row in group_sorted.iterrows():
+                target_id = int(row['target_id'])
+                motion_time_ms = int(row['motion_time_ms'])
+                
+                if motion_time_ms > self.max_motion_time_ms:
+                    self.errors.append(f"run_id={run_id}, repetition={repetition}, target_id={target_id}: "
+                                     f"Motion time {motion_time_ms}ms exceeds maximum {self.max_motion_time_ms}ms")
+
+    def validate_file(self, filepath: str) -> bool:
+        try:
+            self.df = pd.read_csv(filepath)
+            
+            if self.df.empty:
+                self.errors.append("CSV file is empty")
+                return False
+
+            # Validate required columns exist
+            required_columns = ['run_id', 'repetition', 'target_id', 'x', 'y', 'z',
+                            'qx', 'qy', 'qz', 'qw', 'start_time', 'end_time', 'motion_time_ms']
+            
+            missing_columns = [col for col in required_columns if col not in self.df.columns]
+            if missing_columns:
+                self.errors.append(f"Missing required columns: {missing_columns}")
+                logger.error(f"Missing columns: {missing_columns}")
+                return False, self.errors, self.warnings
+            
+            # Validate individual rows
+            for row_num, (idx, row) in enumerate(self.df.iterrows(), start=2):  # Start at 2 (header is row 1)
+                self._validate_row(row, row_num)
+            
+            # Validate temporal sequence and continuity
+            if not self.errors:  # Only validate sequence if rows are valid
+                self._validate_temporal_sequence(self.df)
+            
+            return len(self.errors) == 0
+        
+        except FileNotFoundError:
+            self.errors.append(f"File not found: {filepath}")
+            return False
+        except Exception as e:
+            self.errors.append(f"Failed to read file: {str(e)}")
+            return False
+        
+# ----------------------------
 
 
 if __name__ == '__main__':

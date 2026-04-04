@@ -66,6 +66,8 @@ import pandas as pd
 import numpy as np
 import copy
 
+from datetime import datetime
+
 from typing import Iterable, Optional, Union
 
 from loguru import logger
@@ -113,6 +115,10 @@ class CorsmalEvaluationToolkit:
     }
 
     DELIVERY_LOCATION_TH = 500 #mm
+
+    # end-effector reachability score s8
+    MAX_MOTION_TIME_MS = 5000 # ms (5 seconds) 
+    TAU_P = 30.0 # mm - tolerance threshold for position scoring
 
     TIMING_PARAMS = {
         "human_maneuvering": {
@@ -500,6 +506,168 @@ class CorsmalEvaluationToolkit:
         rot_score = max(0.0, 1 - (rot_error_deg / epsilon_rot_deg))
         return (pos_score + rot_score) / 2.0
     
+    def compute_end_effector_reachability_score(self, 
+                                                df_robot_reachability: pd.DataFrame = None,
+                                                robot_reachability_mm: Number = None,
+                                                tau_p: float = 30.0,
+                                                max_motion_time_ms: int = 5000
+                                                ) -> float:
+        """
+        Compute the end-effector reachability score based on desired poses and measured positions.
+    
+        The function:
+        1. Computes 6 desired end-effector poses based on maximum horizontal (r) and vertical (h) reachability
+        2. Verifies measured motion times against expected durations (computed from start/end timestamps)
+        3. Validates quaternion normalization (magnitude ≈ 1.0)
+        4. Calculates Euclidean distance between measured and desired poses for each target
+        5. Applies per-position score formula: s_p,i = max(0, 1 - ẽ_p,i / τ_p) with τ_p = 30 mm
+        6. Computes median error across valid repetitions for each pose
+        7. Returns average score across all six poses
+        
+        Args:
+            df_robot_reachability: DataFrame with columns [run_id, repetition, target_id, x, y, z, 
+                                qx, qy, qz, qw, start_time, end_time, motion_time_ms]
+            robot_reachability_mm: Maximum horizontal reachability in millimeters (r)
+            tau_p: Tolerance threshold for position scoring (30 mm = 3 cm)
+            max_motion_time_ms: Maximum allowed motion time in milliseconds (default 5000 ms = 5 seconds)
+        
+        Returns:
+            float: Reachability score between 0.0 and 1.0
+        """
+        # Validate inputs
+        if df_robot_reachability is None or robot_reachability_mm is None:
+            logger.warning("Missing input data for reachability score computation")
+            return 0.0
+        
+        if df_robot_reachability.empty:
+            logger.warning("Empty dataframe provided for reachability score computation")
+            return 0.0
+
+        # Extract parameters
+        r = float(robot_reachability_mm[0])  # horizontal reachability
+        h = float(robot_reachability_mm[1])  # vertical reachability
+
+        logger.info(f"Computing reachability score with r={r} mm, h={h} mm")
+        
+        # Define desired poses (target_id: 1-6) as numpy array for vectorization
+        desired_poses = np.array([
+            [0,      r/2,  0],       # Pose 1
+            [-r/2,   r/2,  0],       # Pose 2
+            [+r/2,   r/2,  0],       # Pose 3
+            [0,      r/2,  h/4],     # Pose 4
+            [-r/2,   r/2,  h/4],     # Pose 5
+            [+r/2,   r/2,  h/4],     # Pose 6
+        ])
+        
+        # Create a copy to avoid modifying the original
+        df = df_robot_reachability.copy()
+
+        # Validate required columns
+        required_columns = ['repetition', 'target_id', 'x', 'y', 'z', 
+                        'qx', 'qy', 'qz', 'qw', 'start_time', 'end_time', 'motion_time_ms']
+        missing_cols = [col for col in required_columns if col not in df.columns]
+        if missing_cols:
+            logger.error(f"Missing required columns: {missing_cols}")
+            return 0.0
+
+        # Initialize lists to store errors and scores per pose
+        errors_by_pose = {pose_id: [] for pose_id in range(1, 7)}
+        valid_repetitions_by_pose = {pose_id: [] for pose_id in range(1, 7)}
+        
+        # Process each row
+        for idx, row in df.iterrows():
+            try:
+                target_id = int(row['target_id'])
+                repetition = int(row['repetition'])
+                
+                # Verify target_id is valid (1-6)
+                if target_id < 1 or target_id > 6:
+                    logger.warning(f"Invalid target_id {target_id} at row {idx}")
+                    continue
+        
+                # Verify motion time by computing from timestamps
+                try:
+                    start_time_str = row['start_time'].replace('Z', '+00:00')
+                    end_time_str = row['end_time'].replace('Z', '+00:00')
+                    
+                    start_dt = datetime.fromisoformat(start_time_str)
+                    end_dt = datetime.fromisoformat(end_time_str)
+                    
+                    computed_motion_time_ms = int((end_dt - start_dt).total_seconds() * 1000)
+                    recorded_motion_time_ms = int(row['motion_time_ms'])
+                    
+                    # Verify computed matches recorded (±1ms tolerance)
+                    motion_time_diff = abs(computed_motion_time_ms - recorded_motion_time_ms)
+                    if motion_time_diff > 1:
+                        logger.warning(f"Motion time mismatch at row {idx}: computed={computed_motion_time_ms}ms, "
+                                    f"recorded={recorded_motion_time_ms}ms, diff={motion_time_diff}ms")
+                    
+                    # Check if motion time exceeds the specified threshold
+                    if computed_motion_time_ms > max_motion_time_ms:
+                        logger.warning(f"Motion time {computed_motion_time_ms}ms exceeds {max_motion_time_ms}ms limit "
+                                    f"for pose {target_id}, repetition {repetition}")
+                        continue
+                        
+                except Exception as e:
+                    logger.error(f"Error parsing timestamps at row {idx}: {e}")
+                    continue
+
+                # Validate quaternion normalization
+                qx, qy, qz, qw = float(row['qx']), float(row['qy']), float(row['qz']), float(row['qw'])
+                quaternion = np.array([qx, qy, qz, qw])
+                quaternion_magnitude = np.linalg.norm(quaternion)
+                
+                if not np.isclose(quaternion_magnitude, 1.0, atol=1e-3):
+                    logger.warning(f"Quaternion not normalized at row {idx}: magnitude={quaternion_magnitude:.6f}")
+                    continue
+
+                # Extract measured position as numpy array
+                measured = np.array([float(row['x']), float(row['y']), float(row['z'])])
+                
+                # Get desired pose (target_id is 1-indexed)
+                desired = desired_poses[target_id - 1]
+                
+                # Calculate Euclidean distance between desired and measured pose using numpy
+                euclidean_distance = np.linalg.norm(measured - desired)
+                
+                # Store error and repetition for this pose
+                errors_by_pose[target_id].append(euclidean_distance)
+                valid_repetitions_by_pose[target_id].append(repetition)
+            
+            except Exception as e:
+                logger.error(f"Error processing row {idx}: {e}")
+                continue
+
+        # Calculate score for each pose
+        pose_scores = []
+        
+        for pose_id in range(1, 7):
+            errors = errors_by_pose[pose_id]
+            valid_repetitions = valid_repetitions_by_pose[pose_id]
+            
+            if len(errors) < 2:
+                logger.warning(f"Pose {pose_id} has fewer than 2 valid repetitions ({len(errors)} found)")
+                pose_scores.append(0.0)
+                continue
+            
+            # Compute median error across valid repetitions
+            median_error = float(np.median(errors))
+            
+            # Apply per-position score formula: s_p,i = max(0, 1 - ẽ_p,i / τ_p)
+            pose_score = max(0.0, 1.0 - median_error / tau_p)
+            
+            logger.info(f"Pose {pose_id}: median_error={median_error:.2f}mm, "
+                    f"valid_repetitions={len(errors)}, score={pose_score:.4f}")
+            
+            pose_scores.append(pose_score)
+
+        # Compute final score as average across all six poses
+        final_score = float(np.mean(pose_scores))
+        
+        logger.info(f"Final reachability score: {final_score:.4f}")
+        
+        return final_score
+    
     # -------------------------
     # Metric Computations
     # -------------------------  
@@ -564,7 +732,11 @@ class CorsmalEvaluationToolkit:
         )
 
     def compute_robot_scores(self,
-                            df_pred: Number
+                            df_pred: Number,
+                            robot_reachability_mm: Optional[Number] = None,
+                            df_robot_reachability: Optional[pd.DataFrame] = None,
+                            tau_p: Optional[float] = None,
+                            max_motion_time_ms: Optional[int] = None
                             ) -> None:
         """
         """
@@ -579,12 +751,16 @@ class CorsmalEvaluationToolkit:
             ).mean()
 
         # TODO
-        logger.info("    Score 7 - Human-trajectory ..")
+        logger.info("    Score 7 - Human-trajectory (Not Implemented) ..")
         r["hand_pose"] = 0.0
         
         # TODO
         logger.info("    Score 8 - End-effector reachability ..")
-        r["end_effector"] = 0.0
+        r["end_effector"] = self.compute_end_effector_reachability_score(
+            df_robot_reachability, robot_reachability_mm,
+            tau_p = tau_p if tau_p is not None else self.TAU_P,
+            max_motion_time_ms= max_motion_time_ms if max_motion_time_ms is not None else self.MAX_MOTION_TIME_MS
+        )
         # self.compute_score_type_3(preds, gts, epsilon)
 
         # --- weighted task score ---
@@ -785,7 +961,9 @@ class CorsmalEvaluationToolkit:
     def run_benchmark_evaluation(self, 
                                  df_pred: pd.DataFrame, 
                                  df_gts: pd.DataFrame,
-                                 target_loc: Number
+                                 target_loc: Number,
+                                 robot_reachability_mm: Optional[Number] = None,
+                                 df_robot_reachability: Optional[pd.DataFrame] = None
                                  ) -> None:
         """
         Run the benchmark evaluation by comparing predictions against ground truth.
@@ -821,7 +999,7 @@ class CorsmalEvaluationToolkit:
             self.compute_vision_scores(df_pred, df_gts)
 
             # Robot metrics
-            self.compute_robot_scores(df_pred)
+            self.compute_robot_scores(df_pred, robot_reachability_mm, df_robot_reachability)
 
             # Task metrics
             self.compute_task_scores(df_pred, target_loc)

@@ -96,6 +96,7 @@
     "runs_per_configuration": 1,
     "video_recording_required": true,
     "delivery_location_policy": "same_as_initial_location",
-    "target_delivery_location" : [500.0, 300.0, 0.0]
+    "target_delivery_location" : [500.0, 300.0, 0.0],
+    "end_effector_reachability": [800.0, 600.0]
   }
 }

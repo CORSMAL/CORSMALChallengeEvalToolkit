@@ -621,7 +621,7 @@ def run_benchmark_evaluation(args) -> dict:
         logger.info("Step 1: Loading and validating input files...")
 
         try:
-            from benchmark.submission_validator import SubmissionValidator
+            from benchmark.submission_validator import SubmissionValidator, ReachabilityValidator
         except ImportError:
             raise RuntimeError(
                 "submission_validator module not found. "
@@ -636,7 +636,16 @@ def run_benchmark_evaluation(args) -> dict:
         print(f"\nSummary: {summary['total_rows']} rows, {summary['errors']} errors, {summary['warnings']} warnings")
 
         df_pred = validator.get_dataframe()
-        
+
+        reachability_validator = ReachabilityValidator()
+        is_valid = reachability_validator.validate_file(args.reachability_csv)
+        reachability_validator.print_report()
+    
+        summary = reachability_validator.get_summary()
+        print(f"\nSummary: {summary['total_rows']} rows, {summary['errors']} errors, {summary['warnings']} warnings")
+
+        df_robot_reachability = reachability_validator.get_dataframe()
+
         df_gts = validate_ground_truth_csv(args.ground_truth_csv)
 
         report = validate_metadata_json(args.metadata)
@@ -652,6 +661,7 @@ def run_benchmark_evaluation(args) -> dict:
         print("Summary:", report["summary"])
 
         target_location = np.asarray(report["metadata"]["execution_policy"]["target_delivery_location"])
+        end_effector_reachability = np.asarray(report["metadata"]["execution_policy"]["end_effector_reachability"])
 
         configs_fn = os.path.join("resources", "benchmark", "benchmark_configs.csv")
         df_configs = load_configs(configs_fn)
@@ -668,7 +678,9 @@ def run_benchmark_evaluation(args) -> dict:
         
         # Step 3: Run benchmark evaluation
         logger.info("Step 3: Running benchmark evaluation...")
-        evaluator.run_benchmark_evaluation(df_pred, df_gts, target_location)
+        evaluator.run_benchmark_evaluation(
+            df_pred, df_gts, target_location, end_effector_reachability, df_robot_reachability
+        )
         
         # Step 4: Extract results
         logger.info("Step 4: Extract results...")
@@ -934,6 +946,13 @@ def get_parser() -> ArgumentParser:
         required=True,
         type=existing_file,
         help="Path to the submission CSV file with predictions."
+    )
+
+    parser.add_argument(
+        "--reachability_csv",
+        required=True,
+        type=existing_file,
+        help="Path to the reachability CSV file."
     )
 
     parser.add_argument(
